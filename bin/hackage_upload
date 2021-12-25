@@ -3,22 +3,28 @@
 set -eu
 
 if [ "${1:-}" = "candidate" ]; then
-  CANDIDATE="candidate"
-  CANDIDATES="candidates"
+  CANDIDATE="/candidate"
+  CANDIDATES="/candidates"
 else
   CANDIDATE=""
   CANDIDATES=""
 fi
+
+DIST_URL="https://hackage.haskell.org/packages$CANDIDATES"
+DOCS_URL="https://hackage.haskell.org/package/$PACKAGE-$VERSION$CANDIDATE/docs"
+
+echo "Source upload URL: $DIST_URL"
+echo "Docs upload URL:   $DOCS_URL"
 
 cabal sdist
 PACKAGE=$(grep '^name:' *.cabal | awk '{print $2}')
 VERSION=$(grep '^version:' *.cabal | awk '{print $2}')
 curl --header "Authorization: X-ApiKey $API_TOKEN_HACKAGE" \
   -F "package=@dist-newstyle/sdist/$PACKAGE-$VERSION.tar.gz" \
-  "https://hackage.haskell.org/packages$CANDIDATES"
+  "$DIST_URL"
 curl --header "Authorization: X-ApiKey $API_TOKEN_HACKAGE" \
   -X PUT \
   -H "Content-Type: application/x-tar" \
   -H "Content-Encoding: gzip" \
   --data-binary "@dist-newstyle/$PACKAGE-$VERSION-docs.tar.gz" \
-  "https://hackage.haskell.org/package/$PACKAGE-$VERSION$CANDIDATE/docs"
+  "$DOCS_URL"
