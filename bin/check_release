@@ -12,10 +12,14 @@ def github_repo():
     repo = os.environ.get("GITHUB_REPOSITORY")
     if repo:
         return repo
-    return (subprocess.run(
-        ["git", "remote", "get-url", "upstream"],
-        check=True,
-        capture_output=True).stdout.decode("utf-8").strip().split(":")[1])
+    return (
+        subprocess.run(
+            ["git", "remote", "get-url", "upstream"], check=True, capture_output=True
+        )
+        .stdout.decode("utf-8")
+        .strip()
+        .split(":")[1]
+    )
 
 
 def release_github():
@@ -35,9 +39,11 @@ def release_bazel(path: str):
     with open(os.path.join(path, "BUILD.bazel"), "r") as fh:
         bzl = ast.parse(fh.read(), filename=path)
         for stmt in bzl.body:
-            if (isinstance(stmt, ast.Expr) and
-                    isinstance(stmt.value, ast.Call) and
-                    stmt.value.func.id == "haskell_library"):
+            if (
+                isinstance(stmt, ast.Expr)
+                and isinstance(stmt.value, ast.Call)
+                and stmt.value.func.id == "haskell_library"
+            ):
                 for arg in stmt.value.keywords:
                     if arg.arg == "version":
                         return arg.value.s
@@ -54,8 +60,10 @@ def main(prog: str, args: List[str]):
     if gh_release == bzl_release:
         print(f"PASS: Upcoming release version is {gh_release}")
     else:
-        print(f"FAIL: GitHub draft release {gh_release} does not match "
-              f"BUILD.bazel {bzl_release}")
+        print(
+            f"FAIL: GitHub draft release {gh_release} does not match "
+            f"BUILD.bazel {bzl_release}"
+        )
         sys.exit(1)
 
 
