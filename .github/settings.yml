@@ -3,14 +3,12 @@ _extends: .github
 
 repository:
   name: ci-tools
-  description: Common tools for building TokTok repositories on Travis
-  topics: haskell, travis
+  description: Common tools for building TokTok repositories on CI
+  topics: haskell, ci
 
 branches:
   - name: "master"
     protection:
       required_status_checks:
         contexts:
-          - Codacy/PR Quality Review
-          - Travis CI - Pull Request
-          - code-review/reviewable
+          - "code-review/reviewable"
