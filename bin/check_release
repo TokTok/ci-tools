@@ -63,11 +63,7 @@ def release_bazel(path: str):
 
 
 def main(prog: str, args: List[str]):
-    if len(args) != 1:
-        print(f"Usage: {prog}")
-        sys.exit(1)
-
-    path = args[0]
+    path = args[0] if args else "."
 
     gh_release = release_github()
     bzl_release = release_bazel(path)
