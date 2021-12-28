@@ -25,9 +25,10 @@ def release_github():
     )
     release = resp.json()[0]
     if not release["draft"]:
-        print("Could not find the latest draft release.")
+        print("WARNING: Could not find the latest draft release.")
+        print("WARNING: Skipping this check.")
         print(f"Latest release found was {release['name']}")
-        sys.exit(1)
+        sys.exit(0)
     return release["name"][1:]
 
 
