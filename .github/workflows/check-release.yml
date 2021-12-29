@@ -4,8 +4,7 @@
 name: Check release
 
 on:
-  pull_request_target:
-    branches: [master]
+  workflow_call:
 
 jobs:
   check-release:
