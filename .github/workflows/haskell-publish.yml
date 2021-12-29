@@ -16,22 +16,23 @@ jobs:
 
       - uses: actions/setup-haskell@v1
         with:
-          ghc-version: "8.10.3"
-          cabal-version: "3.2"
+          ghc-version: "9.2.1"
+          cabal-version: "3.6.2.0"
 
       - name: Cache
         uses: actions/cache@v2
         env:
+          ghc-version: "9.2.1"
           cache-name: cache-cabal
         with:
           path: |
             ~/.cabal/packages
             ~/.cabal/store
             dist-newstyle
-          key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}
+          key: ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}
           restore-keys: |
-            ${{ runner.os }}-build-${{ env.cache-name }}-
-            ${{ runner.os }}-build-
+            ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-
+            ${{ runner.os }}-${{ env.ghc-version }}-
             ${{ runner.os }}-
 
       - name: Build haddock documentation

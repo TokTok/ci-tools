@@ -2,34 +2,30 @@ on:
   workflow_call:
 
 jobs:
-  build-cabal:
-    name: Cabal Build
+  cabal:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        cabal: ["3.6.2.0"]
-        ghc: ["9.2.1"]
 
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-haskell@v1
         with:
-          ghc-version: ${{ matrix.ghc }}
-          cabal-version: ${{ matrix.cabal }}
+          ghc-version: "9.2.1"
+          cabal-version: "3.6.2.0"
 
       - name: Cache
         uses: actions/cache@v2
         env:
+          ghc-version: "9.2.1"
           cache-name: cache-cabal
         with:
           path: |
             ~/.cabal/packages
             ~/.cabal/store
             dist-newstyle
-          key: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}
+          key: ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
-            ${{ runner.os }}-${{ matrix.ghc }}-
+            ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-
+            ${{ runner.os }}-${{ env.ghc-version }}-
             ${{ runner.os }}-
 
       - name: Install non-Haskell dependencies
@@ -37,34 +33,30 @@ jobs:
       - name: Run tests
         run: cabal test --enable-doc all
 
-  build-stack:
-    name: Stack Build
+  stack:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        stack: ["latest"]
-        ghc: ["9.2.1"]
 
     steps:
       - uses: actions/checkout@v2
       - uses: actions/setup-haskell@v1
         with:
-          ghc-version: ${{ matrix.ghc }}
+          ghc-version: "9.2.1"
           enable-stack: true
-          stack-version: ${{ matrix.stack }}
+          stack-version: "latest"
 
       - name: Cache
         uses: actions/cache@v2
         env:
+          ghc-version: "9.2.1"
           cache-name: cache-stack
         with:
           path: |
             ~/.stack
             .stack-work
-          key: ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('stack.yaml') }}
+          key: ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('stack.yaml') }}
           restore-keys: |
-            ${{ runner.os }}-${{ matrix.ghc }}-${{ env.cache-name }}-
-            ${{ runner.os }}-${{ matrix.ghc }}-
+            ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-
+            ${{ runner.os }}-${{ env.ghc-version }}-
             ${{ runner.os }}-
 
       - name: Install non-Haskell dependencies
