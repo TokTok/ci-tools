@@ -1,10 +1,9 @@
-name: Publish to Hackage
-
 on:
   workflow_call:
 
 jobs:
   hackage:
+    name: Publish to Hackage
     runs-on: ubuntu-latest
 
     steps:

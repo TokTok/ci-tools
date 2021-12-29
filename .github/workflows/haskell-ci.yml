@@ -1,10 +1,9 @@
-name: Haskell Build
-
 on:
   workflow_call:
 
 jobs:
   build-cabal:
+    name: Cabal Build
     runs-on: ubuntu-latest
 
     steps:
@@ -35,6 +34,7 @@ jobs:
         run: cabal test --enable-doc all
 
   build-stack:
+    name: Stack Build
     runs-on: ubuntu-latest
 
     steps:
