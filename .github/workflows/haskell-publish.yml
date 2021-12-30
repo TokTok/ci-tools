@@ -1,5 +1,14 @@
 on:
   workflow_call:
+    inputs:
+      ghc-version:
+        required: false
+        type: string
+        default: "9.2.1"
+      cabal-version:
+        required: false
+        type: string
+        default: "3.6.2.0"
 
 jobs:
   hackage:
@@ -16,13 +25,13 @@ jobs:
 
       - uses: actions/setup-haskell@v1
         with:
-          ghc-version: "9.2.1"
-          cabal-version: "3.6.2.0"
+          ghc-version: ${{ inputs.ghc-version }}
+          cabal-version: ${{ inputs.cabal-version }}
 
       - name: Cache
         uses: actions/cache@v2
         env:
-          ghc-version: "9.2.1"
+          ghc-version: ${{ inputs.ghc-version }}
           cache-name: cache-cabal
         with:
           path: |
