@@ -4,7 +4,7 @@ on:
       ghc-version:
         required: false
         type: string
-        default: "8.10.7"
+        default: "8.10.3"
       cabal-version:
         required: false
         type: string
