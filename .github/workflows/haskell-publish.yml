@@ -42,7 +42,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-
             ${{ runner.os }}-${{ env.ghc-version }}-
-            ${{ runner.os }}-
 
       - name: Build haddock documentation
         run: cabal haddock --haddock-for-hackage --enable-doc
