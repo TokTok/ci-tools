@@ -9,6 +9,9 @@ on:
         required: false
         type: string
         default: "3.6.2.0"
+    secrets:
+      API_TOKEN_HACKAGE:
+        required: true
 
 jobs:
   hackage:
