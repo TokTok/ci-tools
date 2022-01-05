@@ -47,7 +47,7 @@ jobs:
             ${{ runner.os }}-${{ env.ghc-version }}-
 
       - name: Build haddock documentation
-        run: cabal haddock --haddock-for-hackage --enable-doc
+        run: cabal update && cabal haddock --haddock-for-hackage --enable-doc
 
       - name: Publish package candidate to Hackage
         if: ${{ github.event_name == 'push' }}
