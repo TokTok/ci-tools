@@ -31,7 +31,7 @@ jobs:
             ~/.cabal/packages
             ~/.cabal/store
             dist-newstyle
-          key: ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}
+          key: ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-${{ hashFiles('BUILD.bazel') }}
           restore-keys: |
             ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-
             ${{ runner.os }}-${{ env.ghc-version }}-
@@ -61,7 +61,7 @@ jobs:
           path: |
             ~/.stack
             .stack-work
-          key: ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('stack.yaml') }}
+          key: ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-${{ hashFiles('BUILD.bazel') }}
           restore-keys: |
             ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-
             ${{ runner.os }}-${{ env.ghc-version }}-
