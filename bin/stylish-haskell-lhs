@@ -17,7 +17,9 @@ $Data::Dumper::Indent   = 1;
 my $INPLACE = $ARGV[0] eq "-i";
 shift @ARGV if $INPLACE;
 
-my @FILES = @ARGV or die "Usage: format-haskell [-i] <file|dir>...";
+my $STYLISH_HASKELL = ($0 =~ /stylish-haskell$/ ? "stylish-haskell.distrib" : "stylish-haskell");
+
+my @FILES = @ARGV or die "Usage: $0 [-i] <file|dir>...\n(will invoke $STYLISH_HASKELL after preprocessing)\n";
 
 sub parse_file {
    my ($file) = @_;
@@ -51,7 +53,7 @@ sub parse_file {
 
 sub stylish_haskell {
    my ($out, $in);
-   my $pid = open2 $out, $in, "stylish-haskell";
+   my $pid = open2 $out, $in, $STYLISH_HASKELL;
    print $in "$_\n" for @_;
    close $in;
 
@@ -66,7 +68,7 @@ sub format_file {
    my ($file) = @_;
 
    if ($file =~ /\.hs$/) {
-      system "stylish-haskell", "-i", $file;
+      system $STYLISH_HASKELL, "-i", $file;
    } else {
       my ($lines, $docs, @code) = parse_file $file;
       @code = stylish_haskell @code;
