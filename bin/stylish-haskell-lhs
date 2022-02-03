@@ -8,6 +8,7 @@ use v5.10.1;
 
 use Data::Dumper;
 use File::Find;
+use File::Temp qw/tempfile/;
 use IPC::Open2;
 
 $Data::Dumper::Sortkeys = 1;
@@ -18,8 +19,6 @@ my $INPLACE = $ARGV[0] eq "-i";
 shift @ARGV if $INPLACE;
 
 my $STYLISH_HASKELL = ($0 =~ /stylish-haskell$/ ? "stylish-haskell.distrib" : "stylish-haskell");
-
-my @FILES = @ARGV or die "Usage: $0 [-i] <file|dir>...\n(will invoke $STYLISH_HASKELL after preprocessing)\n";
 
 sub parse_file {
    my ($file) = @_;
@@ -67,8 +66,23 @@ sub stylish_haskell {
 sub format_file {
    my ($file) = @_;
 
-   if ($file =~ /\.hs$/) {
-      system $STYLISH_HASKELL, "-i", $file;
+   my $is_lhs = 0;
+   if (not defined $file) {
+       die "-i cannot be used with stdin" if $INPLACE;
+       # No file => read stdin.
+       (my $fh, $file) = tempfile SUFFIX => ".hs";
+       while (<>) {
+          print $fh $_;
+          $is_lhs = 1 if /^\\begin/;
+       }
+   }
+
+   if (not $is_lhs and $file =~ /\.hs$/) {
+      if ($INPLACE) {
+         system $STYLISH_HASKELL, "-i", $file;
+      } else {
+         system $STYLISH_HASKELL, $file;
+      }
    } else {
       my ($lines, $docs, @code) = parse_file $file;
       @code = stylish_haskell @code;
@@ -105,7 +119,11 @@ sub format_file {
    }
 }
 
-for my $file (@FILES) {
+if (not @ARGV) {
+   format_file undef;
+}
+
+for my $file (@ARGV) {
    if (-f $file) {
       format_file $file;
    } else {
