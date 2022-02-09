@@ -9,9 +9,6 @@ on:
         required: false
         type: string
         default: "3.6.2.0"
-      package:
-        required: true
-        type: string
     secrets:
       API_TOKEN_HACKAGE:
         required: true
@@ -36,7 +33,7 @@ jobs:
         with:
           file: .github/docker/Dockerfile
           push: true
-          tags: toxchat/haskell:${{ inputs.package }}
+          tags: toxchat/haskell:${{ github.event.repository.name }}
 
   hackage:
     name: Publish to Hackage
