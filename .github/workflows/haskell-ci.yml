@@ -1,73 +1,15 @@
-on:
-  workflow_call:
-    inputs:
-      ghc-version:
-        required: false
-        type: string
-        default: "8.10.3"
-      cabal-version:
-        required: false
-        type: string
-        default: "3.4"
+on: [workflow_call]
 
 jobs:
-  cabal:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-haskell@v1
-        with:
-          ghc-version: ${{ inputs.ghc-version }}
-          cabal-version: ${{ inputs.cabal-version }}
-
-      - name: Cache
-        uses: actions/cache@v2
-        env:
-          ghc-version: ${{ inputs.ghc-version }}
-          cache-name: cache-cabal
-        with:
-          path: |
-            ~/.cabal/packages
-            ~/.cabal/store
-            dist-newstyle
-          key: ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-${{ hashFiles('BUILD.bazel') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-
-            ${{ runner.os }}-${{ env.ghc-version }}-
-
-      - name: Install non-Haskell dependencies
-        run: if [ -f tools/prepare_third_party.sh ]; then tools/prepare_third_party.sh; fi
-      - name: Run tests
-        run: cabal update && cabal test --enable-doc all
-
   stack:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-haskell@v1
-        with:
-          ghc-version: ${{ inputs.ghc-version }}
-          enable-stack: true
-          stack-version: "latest"
-
-      - name: Cache
-        uses: actions/cache@v2
-        env:
-          ghc-version: ${{ inputs.ghc-version }}
-          cache-name: cache-stack
-        with:
-          path: |
-            ~/.stack
-            .stack-work
-          key: ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-${{ hashFiles('BUILD.bazel') }}
-          restore-keys: |
-            ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-
-            ${{ runner.os }}-${{ env.ghc-version }}-
-            ${{ runner.os }}-
-
-      - name: Install non-Haskell dependencies
-        run: if [ -f tools/prepare_third_party.sh ]; then tools/prepare_third_party.sh; fi
       - name: Run tests
-        run: stack test
+        run: |
+          IMAGE=toxchat/haskell:${{ github.event.repository.name }}
+          if ! docker pull "$IMAGE"; then
+            IMAGE=toxchat/haskell:latest
+            docker pull "$IMAGE"
+          fi
+          docker run --rm -v "$PWD:/work" "$IMAGE" stack build --allow-different-user

@@ -21,7 +21,7 @@ def github_repo():
 def release_github():
     resp = requests.get(
         f"{os.environ['GITHUB_API_URL']}/repos/{github_repo()}/releases",
-        auth=(os.environ["GH_USER"], os.environ["GH_TOKEN"]),
+        auth=("", os.environ["GITHUB_TOKEN"]),
     )
     release = resp.json()[0]
     if not release["draft"]:

@@ -4,11 +4,11 @@ on:
       ghc-version:
         required: false
         type: string
-        default: "9.2.1"
+        default: "8.10.3"
       cabal-version:
         required: false
         type: string
-        default: "3.6.2.0"
+        default: "3.4"
     secrets:
       API_TOKEN_HACKAGE:
         required: true
@@ -34,6 +34,8 @@ jobs:
           file: .github/docker/Dockerfile
           push: true
           tags: toxchat/haskell:${{ github.event.repository.name }}
+          cache-from: type=registry,ref=toxchat/haskell:${{ github.event.repository.name }}-buildcache
+          cache-to: type=registry,ref=toxchat/haskell:${{ github.event.repository.name }}-buildcache,mode=max
 
   hackage:
     name: Publish to Hackage
