@@ -6,10 +6,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Run tests
-        run: |
-          IMAGE=toxchat/haskell:${{ github.event.repository.name }}
-          if ! docker pull "$IMAGE"; then
-            IMAGE=toxchat/haskell:latest
-            docker pull "$IMAGE"
-          fi
-          docker run --rm -v "$PWD:/work" "$IMAGE" stack build --allow-different-user
+        run:
+          docker run --rm
+            -v "$PWD:/work/${{ github.event.repository.name }}"
+            "$IMAGE"
+            stack build "echo ${{ github.event.repository.name }} | sed -e 's/^hs-//'"
