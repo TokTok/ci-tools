@@ -34,8 +34,6 @@ jobs:
           file: .github/docker/Dockerfile
           push: true
           tags: toxchat/haskell:${{ github.event.repository.name }}
-          cache-from: type=registry,ref=toxchat/haskell:${{ github.event.repository.name }}-buildcache
-          cache-to: type=registry,ref=toxchat/haskell:${{ github.event.repository.name }}-buildcache,mode=max
 
   hackage:
     name: Publish to Hackage
