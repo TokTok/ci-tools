@@ -9,5 +9,5 @@ jobs:
         run:
           docker run --rm
             -v "$PWD:/work/${{ github.event.repository.name }}"
-            "$IMAGE"
+            toxchat/haskell
             stack build $(echo ${{ github.event.repository.name }} | sed -e 's/^hs-//')
