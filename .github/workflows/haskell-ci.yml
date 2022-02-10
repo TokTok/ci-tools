@@ -3,11 +3,8 @@ on: [workflow_call]
 jobs:
   stack:
     runs-on: ubuntu-latest
+    container: toxchat/haskell
     steps:
       - uses: actions/checkout@v2
       - name: Run tests
-        run:
-          docker run --rm
-            -v "$PWD:/work/${{ github.event.repository.name }}"
-            toxchat/haskell
-            stack build $(echo ${{ github.event.repository.name }} | sed -e 's/^hs-//')
+        run: stack build "$(echo ${{ github.event.repository.name }} | sed -e 's/^hs-//')"
