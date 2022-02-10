@@ -7,4 +7,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Run tests
-        run: stack build "$(echo ${{ github.event.repository.name }} | sed -e 's/^hs-//')"
+        run: |
+          export HOME=/home/builder
+          stack build
