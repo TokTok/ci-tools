@@ -3,10 +3,8 @@ on: [workflow_call]
 jobs:
   stack:
     runs-on: ubuntu-latest
-    container: toxchat/haskell
+    container: toxchat/toktok-stack:haskell
     steps:
       - uses: actions/checkout@v2
       - name: Run tests
-        run: |
-          export HOME=/home/builder
-          stack build
+        run: stack build
