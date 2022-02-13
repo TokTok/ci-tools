@@ -7,4 +7,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Run tests
-        run: stack build
+        run: stack test
+      - name: Build source package
+        run: stack sdist
