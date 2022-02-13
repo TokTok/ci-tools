@@ -67,6 +67,9 @@ jobs:
             ${{ runner.os }}-${{ env.ghc-version }}-${{ env.cache-name }}-
             ${{ runner.os }}-${{ env.ghc-version }}-
 
+      - name: Install non-Haskell dependencies
+        run: if [ -f tools/prepare_third_party.sh ]; then tools/prepare_third_party.sh; fi
+
       - name: Build haddock documentation
         run: cabal update && cabal haddock --haddock-for-hackage --enable-doc
 
