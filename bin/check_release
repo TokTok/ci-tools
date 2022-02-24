@@ -23,6 +23,7 @@ def release_github():
         f"{os.environ['GITHUB_API_URL']}/repos/{github_repo()}/releases",
         auth=("", os.environ["GITHUB_TOKEN"]),
     )
+    print(resp.text)
     release = resp.json()[0]
     if not release["draft"]:
         print("WARNING: Could not find the latest draft release.")
