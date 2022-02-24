@@ -3,12 +3,13 @@ import ast
 import os
 import subprocess
 import sys
+from typing import cast
 from typing import List
 
 import requests
 
 
-def github_repo():
+def github_repo() -> str:
     repo = os.environ.get("GITHUB_REPOSITORY")
     if repo:
         return repo
@@ -18,27 +19,34 @@ def github_repo():
         capture_output=True).stdout.decode("utf-8").strip().split(":")[1])
 
 
-def release_github():
+def release_github() -> str:
     resp = requests.get(
         f"{os.environ['GITHUB_API_URL']}/repos/{github_repo()}/releases",
         auth=("", os.environ["GITHUB_TOKEN"]),
     )
-    print(resp.text)
-    release = resp.json()[0]
+
+    releases = resp.json()
+    if not releases:
+        print("WARNING: GitHub API produced empty response.")
+        print("WARNING: Skipping this check.")
+        sys.exit(0)
+
+    release = releases[0]
     if not release["draft"]:
         print("WARNING: Could not find the latest draft release.")
         print("WARNING: Skipping this check.")
         print(f"Latest release found was {release['name']}")
         sys.exit(0)
-    return release["name"][1:]
+    return cast(str, release["name"][1:])
 
 
-def release_bazel(path: str):
+def release_bazel(path: str) -> str:
     with open(os.path.join(path, "BUILD.bazel"), "r") as fh:
         bzl = ast.parse(fh.read(), filename=path)
         for stmt in bzl.body:
             if (isinstance(stmt, ast.Expr)
                     and isinstance(stmt.value, ast.Call)
+                    and isinstance(stmt.value.func, ast.FunctionDef)
                     and stmt.value.func.id == "haskell_library"):
                 for arg in stmt.value.keywords:
                     if arg.arg == "version":
@@ -47,7 +55,7 @@ def release_bazel(path: str):
     raise Exception(f"Could not find a haskell_library.version in {path}")
 
 
-def main(prog: str, args: List[str]):
+def main(prog: str, args: List[str]) -> None:
     path = args[0] if args else "."
 
     gh_release = release_github()
