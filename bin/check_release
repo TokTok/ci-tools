@@ -46,10 +46,12 @@ def release_bazel(path: str) -> str:
         for stmt in bzl.body:
             if (isinstance(stmt, ast.Expr)
                     and isinstance(stmt.value, ast.Call)
-                    and isinstance(stmt.value.func, ast.FunctionDef)
+                    and isinstance(stmt.value.func, ast.Name)
                     and stmt.value.func.id == "haskell_library"):
                 for arg in stmt.value.keywords:
-                    if arg.arg == "version":
+                    if (arg.arg == "version"
+                            and isinstance(arg.value, ast.Constant)
+                            and isinstance(arg.value.s, str)):
                         return arg.value.s
 
     raise Exception(f"Could not find a haskell_library.version in {path}")
