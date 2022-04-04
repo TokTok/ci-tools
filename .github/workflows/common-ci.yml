@@ -9,7 +9,10 @@ jobs:
           submodules: recursive
       - name: Install
         run: |
-          wget -O buildifier https://github.com/bazelbuild/buildtools/releases/download/4.2.4/buildifier-linux-amd64
+          BUILDIFIER_URL=https://github.com/bazelbuild/buildtools/releases/download/5.0.1/buildifier-linux-amd64
+          wget -O buildifier "$BUILDIFIER_URL" ||
+            wget -O buildifier "$BUILDIFIER_URL" ||
+            wget -O buildifier "$BUILDIFIER_URL"
           chmod +x buildifier
       - name: Check
         run: ./buildifier --lint=warn --warnings=all -mode diff $(find . -type f -name "WORKSPACE" -or -name "BUILD.*")
