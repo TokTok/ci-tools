@@ -9,7 +9,7 @@ jobs:
           submodules: recursive
       - name: Install
         run: |
-          BUILDIFIER_URL=https://github.com/bazelbuild/buildtools/releases/download/6.1.2/buildifier-linux-amd64
+          BUILDIFIER_URL=https://github.com/bazelbuild/buildtools/releases/download/v6.1.2/buildifier-linux-amd64
           wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 -O buildifier "$BUILDIFIER_URL"
           chmod +x buildifier
       - name: Check
