@@ -4,15 +4,13 @@ jobs:
   buildifier:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: recursive
       - name: Install
         run: |
-          BUILDIFIER_URL=https://github.com/bazelbuild/buildtools/releases/download/5.0.1/buildifier-linux-amd64
-          wget -O buildifier "$BUILDIFIER_URL" ||
-            wget -O buildifier "$BUILDIFIER_URL" ||
-            wget -O buildifier "$BUILDIFIER_URL"
+          BUILDIFIER_URL=https://github.com/bazelbuild/buildtools/releases/download/6.1.2/buildifier-linux-amd64
+          wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 -O buildifier "$BUILDIFIER_URL"
           chmod +x buildifier
       - name: Check
         run: ./buildifier --lint=warn --warnings=all -mode diff $(find . -type f -name "WORKSPACE" -or -name "BUILD.*")

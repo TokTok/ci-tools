@@ -22,14 +22,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
       - name: Login to DockerHub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build and push
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v4
         with:
           file: .github/docker/Dockerfile
           push: true
@@ -40,20 +40,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Checkout TokTok/ci-tools
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: TokTok/ci-tools
           path: ci-tools
 
-      - uses: actions/setup-haskell@v1
+      - uses: actions/setup-haskell@v1.1
         with:
           ghc-version: ${{ inputs.ghc-version }}
           cabal-version: ${{ inputs.cabal-version }}
 
       - name: Cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         env:
           ghc-version: ${{ inputs.ghc-version }}
           cache-name: cache-cabal
