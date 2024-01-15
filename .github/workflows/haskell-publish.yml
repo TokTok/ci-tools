@@ -47,7 +47,7 @@ jobs:
           repository: TokTok/ci-tools
           path: ci-tools
 
-      - uses: haskell/actions/setup@v2
+      - uses: haskell-actions/setup@v2
         with:
           ghc-version: ${{ inputs.ghc-version }}
           cabal-version: ${{ inputs.cabal-version }}
