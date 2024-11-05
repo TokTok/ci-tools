@@ -6,4 +6,4 @@ on:
 
 jobs:
   common:
-    uses: TokTok/ci-tools/.github/workflows/common-ci.yml@master
+    uses: ./.github/workflows/common-ci.yml
