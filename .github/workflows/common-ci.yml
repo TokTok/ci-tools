@@ -19,9 +19,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
       - uses: restyled-io/actions/setup@v4
       - id: restyler
         uses: restyled-io/actions/run@v4
