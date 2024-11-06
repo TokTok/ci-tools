@@ -1,8 +1,7 @@
 # WARNING: Actions in this file can access repository secrets. They should never
 # execute code of the pull request. All scripts should be fetched from merged
 # TokTok code.
-on:
-  workflow_call:
+on: [workflow_call]
 
 jobs:
   check-release:
