@@ -24,10 +24,10 @@ jobs:
         uses: restyled-io/actions/run@v4
 
       - name: Copy patch to staged artifact
-        if: ${{ steps.restyler.outputs.patch }}
+        if: ${{ steps.restyler.outputs.git-patch }}
         run: |
           cat >>/tmp/restyled.diff <<'EOM'
-          ${{ steps.restyler.outputs.patch }}
+          ${{ steps.restyler.outputs.git-patch }}
           EOM
 
       - id: upload
