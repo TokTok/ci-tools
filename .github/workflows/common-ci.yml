@@ -48,3 +48,4 @@ jobs:
               curl '${{ steps.upload.outputs.artifact-url }}' | unzip -p - restyled.diff | git am
 
           EOM
+          exit 1
