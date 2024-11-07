@@ -22,8 +22,13 @@ jobs:
       - uses: restyled-io/actions/setup@v4
       - id: restyler
         uses: restyled-io/actions/run@v4
-        with:
-          fail-on-differences: true
+
+      - name: Copy patch to staged artifact
+        if: ${{ steps.restyler.outputs.patch }}
+        run: |
+          cat >>/tmp/restyled.diff <<'EOM'
+          ${{ steps.restyler.outputs.patch }}
+          EOM
 
       - id: upload
         uses: actions/upload-artifact@v4
@@ -31,3 +36,15 @@ jobs:
           path: /tmp/restyled.diff
           if-no-files-found: ignore
           overwrite: true
+
+      - name: Print patch instructions
+        if: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          cat >>"$GITHUB_STEP_SUMMARY" <<'EOM'
+          ## Restyled
+
+          To apply these fixes locally, run:
+
+              curl '${{ steps.upload.outputs.artifact-url }}' | unzip -p - restyled.diff | git am
+
+          EOM
