@@ -1,9 +1,0 @@
-name: checks
-
-on:
-  pull_request_target:
-    branches: [master]
-
-jobs:
-  checks:
-    uses: ./.github/workflows/check-release.yml
