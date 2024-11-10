@@ -1,5 +1,7 @@
 # Continuous integration tool repository
 
+Version: 0.8.1
+
 This repository contains tools for working with the TokTok Haskell
 repositories. Its purpose is mainly to centralise the costly building of
 external tools like `hlint` and `stylish-haskell`, which otherwise each Travis

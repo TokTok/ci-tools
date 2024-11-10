@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import ast
 import os
+import re
 import subprocess
 import sys
 from typing import cast
 from typing import List
+from typing import Optional
 
 import requests
 
@@ -19,7 +21,7 @@ def github_repo() -> str:
         capture_output=True).stdout.decode("utf-8").strip().split(":")[1])
 
 
-def release_github() -> str:
+def release_github() -> Optional[str]:
     resp = requests.get(
         f"{os.environ['GITHUB_API_URL']}/repos/{github_repo()}/releases",
         auth=("", os.environ["GITHUB_TOKEN"]),
@@ -27,20 +29,70 @@ def release_github() -> str:
 
     releases = resp.json()
     if not releases:
-        print("WARNING: GitHub API produced empty response.")
-        print("WARNING: Skipping this check.")
-        sys.exit(0)
+        print("WARNING: GitHub API produced empty response for releases.")
+        print("WARNING: Aborting.")
+        sys.exit(1)
 
     release = releases[0]
     if not release["draft"]:
         print("WARNING: Could not find the latest draft release.")
-        print("WARNING: Skipping this check.")
+        print("WARNING: Skipping the draft release check.")
         print(f"Latest release found was {release['name']}")
-        sys.exit(0)
-    return cast(str, release["name"][1:])
+        return None
+
+    name = cast(str, release["name"])
+    if not name.startswith("v"):
+        print(f"WARNING: GitHub release {name} does not start with 'v'.")
+        print("WARNING: Aborting.")
+        sys.exit(1)
+    return name[1:]  # Remove the 'v' prefix.
 
 
-def release_bazel(path: str) -> str:
+def parse_semver(version: str) -> Optional[tuple[int, int, int]]:
+    res = re.match(r"v(\d+)\.(\d+)\.(\d+)", version)
+    if not res:
+        return None
+    return int(res.group(1)), int(res.group(2)), int(res.group(3))
+
+
+def print_semver(version: tuple[int, int, int]) -> str:
+    return f"{version[0]}.{version[1]}.{version[2]}"
+
+
+def release_milestone() -> str:
+    resp = requests.get(
+        f"{os.environ['GITHUB_API_URL']}/repos/{github_repo()}/milestones",
+        auth=("", os.environ["GITHUB_TOKEN"]),
+    )
+
+    milestones = resp.json()
+    if not milestones:
+        print("WARNING: GitHub API produced empty response for milestones.")
+        print("WARNING: Aborting.")
+        sys.exit(1)
+
+    return print_semver(
+        sorted(v for v in tuple(
+            parse_semver(cast(str, ms["title"])) for ms in milestones)
+               if v)[0])
+
+
+def release_pr_milestone() -> str:
+    if "PR_MILESTONE" not in os.environ:
+        print(
+            "WARNING: Could not find the milestone in the PR_MILESTONE environment variable."
+        )
+        print("WARNING: Skipping this check.")
+        sys.exit(1)
+    version = os.environ["PR_MILESTONE"]
+    if not version.startswith("v"):
+        print(f"WARNING: Milestone {version} does not start with 'v'.")
+        print("WARNING: Aborting.")
+        sys.exit(1)
+    return version[1:]  # Remove the 'v' prefix.
+
+
+def release_local(path: str) -> tuple[Optional[str], str]:
     with open(os.path.join(path, "BUILD.bazel"), "r") as fh:
         bzl = ast.parse(fh.read(), filename=path)
         for stmt in bzl.body:
@@ -52,23 +104,56 @@ def release_bazel(path: str) -> str:
                     if (arg.arg == "version"
                             and isinstance(arg.value, ast.Constant)
                             and isinstance(arg.value.s, str)):
-                        return arg.value.s
+                        return arg.value.s, "BUILD.bazel"
 
-    raise Exception(f"Could not find a haskell_library.version in {path}")
+    # Check if configure.ac exists.
+    if os.path.exists(os.path.join(path, "configure.ac")):
+        return None, "configure.ac"
+
+    # Check if README.md contains "Version: x.y.z".
+    if os.path.exists(os.path.join(path, "README.md")):
+        with open(os.path.join(path, "README.md"), "r") as fh:
+            for line in fh:
+                res = re.match(r"Version: (.*)", line)
+                if res:
+                    return res.group(1), "README.md"
+
+    raise Exception(f"Could not find a version in {path}")
 
 
 def main(prog: str, args: List[str]) -> None:
     path = args[0] if args else "."
 
     gh_release = release_github()
-    bzl_release = release_bazel(path)
+    pr_release = release_pr_milestone()
+    ms_release = release_milestone()
+    local_release, local_origin = release_local(path)
 
-    if gh_release == bzl_release:
-        print(f"PASS: Upcoming release version is {gh_release}")
-    else:
-        print(f"FAIL: GitHub draft release {gh_release} does not match "
-              f"BUILD.bazel {bzl_release}")
+    print(f"GitHub release: {gh_release}")
+    print(f"Next GitHub Milestone release: {ms_release}")
+    print(f"PR Milestone release: {pr_release}")
+    print(f"Local release: {local_release} ({local_origin})")
+
+    if gh_release is None:
+        # Default to the milestone version if we can't read the draft release
+        # version. This happens when we call the workflow from a pull_request
+        # event as opposed to a pull_request_target event.
+        gh_release = pr_release
+
+    if local_release and gh_release != local_release:
+        print(f"\nFAIL: GitHub draft release {gh_release} does not match "
+              f"{local_origin} {local_release}")
         sys.exit(1)
+    if ms_release != pr_release:
+        print(f"\nFAIL: Next GitHub Milestone release {ms_release} does not "
+              f"match PR milestone {pr_release}")
+        sys.exit(1)
+    if gh_release != pr_release:
+        print(f"\nFAIL: GitHub draft release {gh_release} does not match "
+              f"PR milestone {pr_release}")
+        sys.exit(1)
+
+    print(f"\nPASS: Upcoming release version is {gh_release}")
 
 
 if __name__ == "__main__":

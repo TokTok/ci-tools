@@ -20,4 +20,5 @@ jobs:
       - name: Check version against GitHub releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_MILESTONE: ${{ github.event.pull_request.milestone.title }}
         run: $GITHUB_WORKSPACE/ci-tools/bin/check_release
