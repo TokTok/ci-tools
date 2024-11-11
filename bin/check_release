@@ -92,7 +92,7 @@ def release_pr_milestone() -> str:
     return version[1:]  # Remove the 'v' prefix.
 
 
-def release_local(path: str) -> tuple[Optional[str], str]:
+def release_local(path: str) -> tuple[Optional[str], str, bool]:
     with open(os.path.join(path, "BUILD.bazel"), "r") as fh:
         bzl = ast.parse(fh.read(), filename=path)
         for stmt in bzl.body:
@@ -104,11 +104,21 @@ def release_local(path: str) -> tuple[Optional[str], str]:
                     if (arg.arg == "version"
                             and isinstance(arg.value, ast.Constant)
                             and isinstance(arg.value.s, str)):
-                        return arg.value.s, "BUILD.bazel"
+                        return arg.value.s, "BUILD.bazel", True
 
-    # Check if configure.ac exists.
     if os.path.exists(os.path.join(path, "configure.ac")):
-        return None, "configure.ac"
+        with open(os.path.join(path, "configure.ac"), "r") as fh:
+            for line in fh:
+                res = re.match(r"AC_INIT\(\[.*\], \[(.*)\][,)]", line)
+                if res:
+                    return res.group(1), "configure.ac", False
+
+    if os.path.exists(os.path.join(path, "cfg/global_vars.mk")):
+        with open(os.path.join(path, "cfg/global_vars.mk"), "r") as fh:
+            for line in fh:
+                res = re.match(r"TOXIC_VERSION = (.*)", line)
+                if res:
+                    return res.group(1), "cfg/global_vars.mk", False
 
     # Check if README.md contains "Version: x.y.z".
     if os.path.exists(os.path.join(path, "README.md")):
@@ -116,7 +126,7 @@ def release_local(path: str) -> tuple[Optional[str], str]:
             for line in fh:
                 res = re.match(r"Version: (.*)", line)
                 if res:
-                    return res.group(1), "README.md"
+                    return res.group(1), "README.md", False
 
     raise Exception(f"Could not find a version in {path}")
 
@@ -127,7 +137,7 @@ def main(prog: str, args: List[str]) -> None:
     gh_release = release_github()
     pr_release = release_pr_milestone()
     ms_release = release_milestone()
-    local_release, local_origin = release_local(path)
+    local_release, local_origin, local_required = release_local(path)
 
     print(f"GitHub release: {gh_release}")
     print(f"Next GitHub Milestone release: {ms_release}")
@@ -140,7 +150,7 @@ def main(prog: str, args: List[str]) -> None:
         # event as opposed to a pull_request_target event.
         gh_release = pr_release
 
-    if local_release and gh_release != local_release:
+    if local_required and gh_release != local_release:
         print(f"\nFAIL: GitHub draft release {gh_release} does not match "
               f"{local_origin} {local_release}")
         sys.exit(1)
