@@ -146,23 +146,25 @@ def main(prog: str, args: List[str]) -> None:
     print(f"PR Milestone release: {pr_release}")
     print(f"Local release: {local_release} ({local_origin})")
 
-    if gh_release is None:
-        # Default to the milestone version if we can't read the draft release
-        # version. This happens when we call the workflow from a pull_request
-        # event as opposed to a pull_request_target event.
-        gh_release = ms_release
-
-    if local_required and gh_release != local_release:
+    if local_required and gh_release and gh_release != local_release:
         print(f"\nFAIL: GitHub draft release {gh_release} does not match "
               f"{local_origin} {local_release}")
         sys.exit(1)
-    if pr_release and ms_release != pr_release:
+    if local_required and ms_release != local_release:
         print(f"\nFAIL: Next GitHub Milestone release {ms_release} does not "
-              f"match PR milestone {pr_release}")
+              f"match {local_origin} {local_release}")
         sys.exit(1)
-    if pr_release and gh_release != pr_release:
+    if pr_release and pr_release != local_release:
+        print(f"\nFAIL: PR milestone {pr_release} does not match "
+              f"{local_origin} {local_release}")
+        sys.exit(1)
+    if gh_release and gh_release != ms_release:
         print(f"\nFAIL: GitHub draft release {gh_release} does not match "
-              f"PR milestone {pr_release}")
+              f"next GitHub Milestone release {ms_release}")
+        sys.exit(1)
+    if pr_release and pr_release != ms_release:
+        print(f"\nFAIL: PR milestone {pr_release} does not match "
+              f"next GitHub Milestone release {ms_release}")
         sys.exit(1)
 
     print(f"\nPASS: Upcoming release version is {gh_release}")
