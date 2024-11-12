@@ -77,7 +77,7 @@ def release_milestone() -> str:
                if v)[0])
 
 
-def release_pr_milestone() -> str:
+def release_pr_milestone() -> Optional[str]:
     if "PR_MILESTONE" not in os.environ:
         print(
             "WARNING: Could not find the milestone in the PR_MILESTONE environment variable."
@@ -85,6 +85,8 @@ def release_pr_milestone() -> str:
         print("WARNING: Skipping this check.")
         sys.exit(1)
     version = os.environ["PR_MILESTONE"]
+    if not version:
+        return None
     if not version.startswith("v"):
         print(f"WARNING: Milestone {version} does not start with 'v'.")
         print("WARNING: Aborting.")
@@ -148,17 +150,17 @@ def main(prog: str, args: List[str]) -> None:
         # Default to the milestone version if we can't read the draft release
         # version. This happens when we call the workflow from a pull_request
         # event as opposed to a pull_request_target event.
-        gh_release = pr_release
+        gh_release = ms_release
 
     if local_required and gh_release != local_release:
         print(f"\nFAIL: GitHub draft release {gh_release} does not match "
               f"{local_origin} {local_release}")
         sys.exit(1)
-    if ms_release != pr_release:
+    if pr_release and ms_release != pr_release:
         print(f"\nFAIL: Next GitHub Milestone release {ms_release} does not "
               f"match PR milestone {pr_release}")
         sys.exit(1)
-    if gh_release != pr_release:
+    if pr_release and gh_release != pr_release:
         print(f"\nFAIL: GitHub draft release {gh_release} does not match "
               f"PR milestone {pr_release}")
         sys.exit(1)
