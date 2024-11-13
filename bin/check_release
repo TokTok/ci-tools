@@ -154,7 +154,7 @@ def main(prog: str, args: List[str]) -> None:
         print(f"\nFAIL: Next GitHub Milestone release {ms_release} does not "
               f"match {local_origin} {local_release}")
         sys.exit(1)
-    if pr_release and pr_release != local_release:
+    if local_required and pr_release and pr_release != local_release:
         print(f"\nFAIL: PR milestone {pr_release} does not match "
               f"{local_origin} {local_release}")
         sys.exit(1)
