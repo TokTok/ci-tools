@@ -2,21 +2,21 @@ on: [workflow_call]
 
 jobs:
   buildifier:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
       - name: Install
         run: |
-          BUILDIFIER_URL=https://github.com/bazelbuild/buildtools/releases/download/v6.1.2/buildifier-linux-amd64
+          BUILDIFIER_URL=https://github.com/bazelbuild/buildtools/releases/download/v7.3.1/buildifier-linux-amd64
           wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 -O buildifier "$BUILDIFIER_URL"
           chmod +x buildifier
       - name: Check
         run: ./buildifier --lint=warn --warnings=all -mode diff $(find . -type f -name "WORKSPACE" -or -name "BUILD.*")
 
   restyled:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
       - uses: restyled-io/actions/setup@v4

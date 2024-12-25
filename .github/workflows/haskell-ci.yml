@@ -2,7 +2,7 @@ on: [workflow_call]
 
 jobs:
   stack:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     container: toxchat/toktok-stack:haskell
     steps:
       - uses: actions/checkout@v4
