@@ -13,7 +13,7 @@ jobs:
           wget --retry-connrefused --waitretry=1 --read-timeout=20 --timeout=15 -t 3 -O buildifier "$BUILDIFIER_URL"
           chmod +x buildifier
       - name: Check
-        run: ./buildifier --lint=warn --warnings=all -mode diff $(find . -type f -name "WORKSPACE" -or -name "BUILD.*")
+        run: ./buildifier --lint=warn --warnings=all -mode diff $(find . -type f -name "WORKSPACE" -or -name "BUILD.*" -or -name "*.BUILD" -or -name "*.bazel")
 
   restyled:
     runs-on: ubuntu-22.04
@@ -43,9 +43,14 @@ jobs:
           cat >>"$GITHUB_STEP_SUMMARY" <<'EOM'
           ## Restyled
 
-          To apply these fixes locally, run:
+          To apply these fixes locally, either:
 
-              curl '${{ steps.upload.outputs.artifact-url }}' | unzip -p - restyled.diff | git am
+              Download '${{ steps.upload.outputs.artifact-url }}' with the web browser
+              $ cat restyled.diff.zip | unzip -p - restyled.diff | git am
+
+          Or use the [hub-restyled](https://github.com/TokTok/hs-github-tools/blob/master/tools/hub-restyled) tool:
+
+              $ hub-restyled
 
           EOM
           exit 1
