@@ -1,0 +1,28 @@
+on:
+  workflow_call:
+    inputs:
+      warn-commits-since-last-release:
+        description: "Warn if close to this many commits since last release"
+        required: false
+        type: number
+        default: 90
+
+jobs:
+  check:
+    permissions:
+      pull-requests: write
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate PR
+        id: validate
+        run: echo "commits-since-last-release=$(git rev-list --count $(git describe --tags --abbrev=0 --match 'v*')..HEAD)" >>$GITHUB_OUTPUT
+      - name: Warn if close to ${{ inputs.warn-commits-since-last-release }} commits since last release
+        if: steps.validate.outputs.commits-since-last-release >= inputs.warn-commits-since-last-release
+        uses: thollander/actions-comment-pull-request@v3
+        with:
+          message: |
+            :warning: There are ${{ steps.validate.outputs.commits-since-last-release }} commits since the last release. Consider releasing soon.
+          comment-tag: execution
