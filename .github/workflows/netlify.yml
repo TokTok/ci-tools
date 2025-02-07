@@ -1,0 +1,83 @@
+# WARNING: Actions in this file can access repository secrets. They should never
+# execute code of the pull request. All scripts should be fetched from merged
+# TokTok code.
+#
+# For security, since this action calls code of the pull request, the code is
+# executed in a docker container, where it doesn't have access to secrets.
+on:
+  workflow_call:
+    inputs:
+      dockerfile:
+        description: "Path to Dockerfile for web build"
+        required: false
+        type: string
+        default: ".netlify/Dockerfile"
+      path:
+        description: "Path to where _site is located in the Docker container"
+        required: false
+        type: string
+        default: "."
+      comment:
+        description: "Whether to comment on the PR with the preview URL"
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      NETLIFY_AUTH_TOKEN:
+        description: "Netlify authentication token"
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    permissions:
+      pull-requests: write
+    environment:
+      name: netlify
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Write preview URL to PR
+        if: github.event_name == 'pull_request_target' && inputs.comment
+        uses: thollander/actions-comment-pull-request@v3
+        with:
+          message: |
+            > [!NOTE]
+            > Building deployment preview...
+          comment-tag: preview
+      - name: Checkout tree
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Build site with Docker
+        run: docker build -t toktok:site -f "${{ inputs.dockerfile }}" .
+      - name: Extract _site from Docker container
+        run: docker run --rm --entrypoint tar toktok:site -C "${{ inputs.path }}" -c _site | tar x
+      - name: Install Netlify CLI
+        run: npm install -g netlify-cli
+      - name: Deploy to Netlify
+        id: deployment
+        run: |
+          if ${{ github.event_name == 'push' }}; then
+            netlify deploy --dir=_site --prod | tee deploy.log
+          else
+            netlify deploy --dir=_site --alias="deploy-preview-${{ github.event.number }}" | tee deploy.log
+          fi
+          echo "page_url=$(grep -E 'Website (draft )?URL:' deploy.log | grep -o 'https://[^ ]*')" >>$GITHUB_OUTPUT
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      - name: Write preview URL to PR
+        if: github.event_name == 'pull_request_target' && inputs.comment
+        uses: thollander/actions-comment-pull-request@v3
+        with:
+          message: |
+            > [!TIP]
+            > Preview URL: ${{ steps.deployment.outputs.page_url }}
+          comment-tag: preview
+      - name: Write warning comment if build failed
+        if: failure() && github.event_name == 'pull_request_target' && inputs.comment
+        uses: thollander/actions-comment-pull-request@v3
+        with:
+          message: |
+            > [!WARNING]
+            > Build failed. Please check the logs.
+          comment-tag: preview
