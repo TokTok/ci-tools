@@ -3,6 +3,7 @@
 # Copyright © 2024-2025 The TokTok team
 import os
 import re
+import urllib.parse
 from dataclasses import dataclass
 from functools import cache as memoize
 from typing import Any
@@ -11,6 +12,7 @@ from typing import Optional
 
 import requests
 from lib import git
+from lib import types
 
 
 @memoize
@@ -84,6 +86,11 @@ def api(
     return api_uncached(url, auth, params)
 
 
+def clear_cache() -> None:
+    """Clear the cache of API calls."""
+    api_requests.clear()
+
+
 def username() -> Optional[str]:
     """Get the GitHub username for the current authenticated user."""
     if not github_token():
@@ -91,7 +98,6 @@ def username() -> Optional[str]:
     return str(api("/user", auth=True)["login"])
 
 
-@memoize
 def release_id(tag: str) -> int:
     """Get the GitHub release ID number for a tag.
 
@@ -196,9 +202,22 @@ def next_milestone() -> Milestone:
     )
 
 
+def close_milestone(number: int) -> None:
+    """Close the milestone with the given number."""
+    response = requests.patch(
+        f"{api_url()}/repos/{repository()}/milestones/{number}",
+        headers=auth_headers(True),
+        json={"state": "closed"},
+    )
+    response.raise_for_status()
+
+
 @dataclass
 class Issue:
     title: str
+    body: str
+    user: str
+    assignees: list[str]
     number: int
     html_url: str
     state: str
@@ -208,6 +227,9 @@ class Issue:
     def fromJSON(issue: dict[str, Any]) -> "Issue":
         return Issue(
             title=str(issue["title"]),
+            body=str(issue["body"]),
+            user=str(issue["user"]["login"]),
+            assignees=[str(a["login"]) for a in issue["assignees"]],
             number=int(issue["number"]),
             html_url=str(issue["html_url"]),
             state=str(issue["state"]),
@@ -227,6 +249,31 @@ def open_milestone_issues(milestone: int) -> list[Issue]:
             ),
         )
     ]
+
+
+def get_issue(issue_number: int) -> Issue:
+    """Get the issue with the given number."""
+    return Issue.fromJSON(api(f"/repos/{repository()}/issues/{issue_number}"))
+
+
+def rename_issue(issue_number: int, title: str) -> None:
+    """Rename the issue with the given number."""
+    response = requests.patch(
+        f"{api_url()}/repos/{repository()}/issues/{issue_number}",
+        headers=auth_headers(True),
+        json={"title": title},
+    )
+    response.raise_for_status()
+
+
+def close_issue(issue_number: int) -> None:
+    """Close the issue with the given number."""
+    response = requests.patch(
+        f"{api_url()}/repos/{repository()}/issues/{issue_number}",
+        headers=auth_headers(True),
+        json={"state": "closed"},
+    )
+    response.raise_for_status()
 
 
 def latest_release() -> str:
@@ -252,6 +299,26 @@ def release_candidates(version: str) -> list[int]:
         int(i) for r in prereleases(version)
         for i in re.findall(r"-rc\.(\d+)$", r)
     ]
+
+
+def issue_assign(issue_id: int, assignees: list[str]) -> None:
+    """Assign the given issue to the given list of users."""
+    response = requests.post(
+        f"{api_url()}/repos/{repository()}/issues/{issue_id}/assignees",
+        headers=auth_headers(True),
+        json={"assignees": assignees},
+    )
+    response.raise_for_status()
+
+
+def issue_unassign(issue_id: int, assignees: list[str]) -> None:
+    """Unassign the given issue from the given list of users."""
+    response = requests.delete(
+        f"{api_url()}/repos/{repository()}/issues/{issue_id}/assignees",
+        headers=auth_headers(True),
+        json={"assignees": assignees},
+    )
+    response.raise_for_status()
 
 
 @dataclass
@@ -325,13 +392,15 @@ def find_pr(head_sha: str, base: str) -> Optional[PullRequest]:
     return None
 
 
-def find_pr_for_branch(head: str, base: str) -> Optional[PullRequest]:
+def find_pr_for_branch(head: str,
+                       base: str,
+                       state: str = "all") -> Optional[PullRequest]:
     """Find a PR with the given head (actor:branch) and base."""
     # The branch may be updated, so we can't use cached API calls.
     response = api_uncached(
         f"/repos/{repository()}/pulls",
         params=(
-            ("state", "all"),
+            ("state", state),
             ("base", base),
             ("head", head),
             ("per_page", 100),
@@ -403,6 +472,7 @@ class ActionRun:
     node_id: str
     name: str
     status: str
+    event: str
     conclusion: str
     html_url: str
     path: str
@@ -414,6 +484,7 @@ class ActionRun:
             node_id=str(run["node_id"]),
             name=str(run["name"]),
             status=str(run["status"]),
+            event=str(run["event"]),
             conclusion=str(run["conclusion"]),
             html_url=str(run["html_url"]),
             path=str(run["path"]),
@@ -488,8 +559,12 @@ def upload_asset(
             **auth_headers(required=True),
         },
         data=data,
-        params={"name": filename},
+        params={
+            "name": filename,
+        },
     )
+    if response.status_code >= 400:
+        print(response.json())
     response.raise_for_status()
 
 
@@ -519,3 +594,147 @@ def mark_ready_for_review(pr_node_id: str) -> None:
             }}
         }}
     """)
+
+
+def push_signed(
+    slug: types.RepoSlug,
+    commit_sha: str,
+    head_branch: str,
+    target_branch: str,
+) -> str:
+    """Create a signed commit (by github-actions[bot]) for the given commit.
+
+    Creates blobs for all the changes in the commit and creates a new tree on
+    top of the given head branch. Then creates a new commit with the new tree
+    and updates the target branch to point to the new commit.
+
+    Returns the SHA of the new commit.
+    """
+    files_changed = git.files_changed(commit_sha)
+    tree_objects = []
+    for file in files_changed:
+        with open(file, "rb") as f:
+            blob_response = requests.post(
+                f"{api_url()}/repos/{slug}/git/blobs",
+                headers=auth_headers(True),
+                json={
+                    "content": f.read().decode("utf-8"),
+                    "encoding": "utf-8"
+                },
+            )
+            blob_response.raise_for_status()
+            tree_objects.append({
+                "path": file,
+                "mode": "100644",
+                "type": "blob",
+                "sha": blob_response.json()["sha"],
+            })
+    tree_response = requests.post(
+        f"{api_url()}/repos/{slug}/git/trees",
+        headers=auth_headers(True),
+        json={
+            "base_tree": git.branch_sha(head_branch),
+            "tree": tree_objects,
+        },
+    )
+    tree_response.raise_for_status()
+    commit_response = requests.post(
+        f"{api_url()}/repos/{slug}/git/commits",
+        headers=auth_headers(True),
+        json={
+            "message": git.commit_message(commit_sha),
+            "tree": tree_response.json()["sha"],
+            "parents": [git.branch_sha(head_branch)],
+        },
+    )
+    commit_response.raise_for_status()
+    branch_response = requests.get(
+        f"{api_url()}/repos/{slug}/branches/{target_branch}",
+        headers=auth_headers(True),
+    )
+    if branch_response.status_code == 404:
+        update_response = requests.post(
+            f"{api_url()}/repos/{slug}/git/refs",
+            headers=auth_headers(True),
+            json={
+                "ref": f"refs/heads/{target_branch}",
+                "sha": commit_response.json()["sha"],
+            },
+        )
+    else:
+        branch_encoded = urllib.parse.quote_plus(target_branch)
+        update_response = requests.patch(
+            f"{api_url()}/repos/{slug}/git/refs/heads/{branch_encoded}",
+            headers=auth_headers(True),
+            json={
+                "sha": commit_response.json()["sha"],
+                "force": True
+            },
+        )
+    update_response.raise_for_status()
+    return commit_response.json()["sha"]
+
+
+def tag(
+    slug: types.RepoSlug,
+    commit_sha: str,
+    tag_name: str,
+    tag_message: str,
+) -> str:
+    """Create an unsigned tag (by github-actions[bot]) for the given commit.
+
+    A human will need to sign it afterwards with the same annotation.
+
+    Returns the SHA of the new tag.
+    """
+    if not tag_message.endswith("\n"):
+        tag_message += "\n"
+    tag_response = requests.post(
+        f"{api_url()}/repos/{slug}/git/tags",
+        headers=auth_headers(True),
+        json={
+            "tag": tag_name,
+            "message": tag_message,
+            "object": commit_sha,
+            "type": "commit",
+            "tagger": {
+                "name": "github-actions[bot]",
+                "email":
+                "41898282+github-actions[bot]@users.noreply.github.com",
+            },
+        },
+    )
+    tag_response.raise_for_status()
+    tag_ref_response = requests.post(
+        f"{api_url()}/repos/{slug}/git/refs",
+        headers=auth_headers(True),
+        json={
+            "ref": f"refs/tags/{tag_name}",
+            "sha": tag_response.json()["sha"],
+        },
+    )
+    tag_ref_response.raise_for_status()
+    return tag_response.json()["sha"]
+
+
+def set_release_notes(tag: str, notes: str, prerelease: bool) -> None:
+    """Set the release notes for a given tag in the release description."""
+    response = requests.patch(
+        f"{api_url()}/repos/{repository()}/releases/{release_id(tag)}",
+        headers=auth_headers(True),
+        json={
+            "body": notes,
+            "tag_name": tag,
+            "prerelease": prerelease,
+        },
+    )
+    response.raise_for_status()
+
+
+def release_is_published(tag: str) -> bool:
+    """Check if the release with the given tag is published.
+
+    Uncached, because we want to check whether our publishing worked.
+    """
+    return (api_uncached(f"/repos/{repository()}/releases/{release_id(tag)}")
+            ["published_at"] is not None)

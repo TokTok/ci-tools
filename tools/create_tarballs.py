@@ -61,12 +61,10 @@ def upload_tarballs(tag: str, tmpdir: str) -> None:
         "xz": "application/x-xz",
     }
     for ext in ("gz", "xz"):
-        for suffix in ("", ".asc"):
-            filename = f"{tag}.tar.{ext}{suffix}"
-            print(f"Uploading {filename} to GitHub release {tag}")
-            with open(os.path.join(tmpdir, filename), "rb") as f:
-                github.upload_asset(tag, filename, content_type[suffix or ext],
-                                    f)
+        filename = f"{tag}.tar.{ext}"
+        print(f"Uploading {filename} to GitHub release {tag}")
+        with open(os.path.join(tmpdir, filename), "rb") as f:
+            github.upload_asset(tag, filename, content_type[ext], f)
 
 
 def main(config: Config) -> None:

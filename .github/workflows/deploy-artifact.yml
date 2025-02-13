@@ -36,6 +36,7 @@ jobs:
         with:
           repository: TokTok/ci-tools
           path: ci-tools
+          submodules: true
 
       - name: Run build
         run: ${{ inputs.run }}

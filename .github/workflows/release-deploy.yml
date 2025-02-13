@@ -1,0 +1,44 @@
+# This workflow is called from "issues" events in repositories.
+on:
+  workflow_call:
+    inputs:
+      production:
+        description: |
+          Whether this is a production release (true) or a release
+          candidate (false).
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  deploy:
+    name: Create release
+    permissions:
+      # write permission is required to create a github release
+      contents: write
+      issues: write
+      pull-requests: write
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+      - name: Checkout ci-tools
+        uses: actions/checkout@v4
+        with:
+          repository: TokTok/ci-tools
+          path: ci-tools
+      - name: Create GitHub actions identity
+        run: ci-tools/tools/use_github_actions_identity.sh
+      - name: Import developer keys
+        run: ci-tools/tools/import_developer_keys.sh
+      - name: Create release
+        run: ci-tools/tools/create_release.py
+          --github-actions
+          --upstream=origin
+          --issue=${{ github.event.issue.number }}
+          ${{ inputs.production && '--production' || '--no-production' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -373,7 +373,7 @@ def format_entry(entries: list[LogEntry]) -> str:
 def format_changelog(
     tag: tuple[str, str],
     groups: dict[str, dict[Optional[str], dict[str, list[LogEntry]]]],
-    old_changelog: dict[str, str],
+    old_changelog: dict[str, changelog.ReleaseNotes],
 ) -> str:
     """
     <a name="v1.17.5"></a>
@@ -403,8 +403,12 @@ def format_changelog(
         f"## {version} ({tag_date})",
     ]
     if tag_message:
-        lines.append("")
-        lines.append(tag_message)
+        if tag_message.header:
+            lines.append("")
+            lines.append(tag_message.header)
+        if tag_message.notes:
+            lines.append("")
+            lines.append(tag_message.notes)
     for category, entries in groups.items():
         if category not in CATEGORIES:
             continue
@@ -427,7 +431,7 @@ def format_changelog(
 
 
 def generate_changelog(
-    old_changelog: dict[str, str],
+    old_changelog: dict[str, changelog.ReleaseNotes],
     parser: LogParser,
     cur_tag: tuple[str, str],
     prev_tag: tuple[str, str],

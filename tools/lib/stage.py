@@ -1,14 +1,16 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2024-2025 The TokTok team
 import time
+from dataclasses import dataclass
 from typing import Any
 from typing import Optional
 
 sleep = time.sleep
 
 
+@dataclass
 class UserAbort(Exception):
-    pass
+    message: str
 
 
 class InvalidState(Exception):

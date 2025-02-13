@@ -227,10 +227,15 @@ def remote_slug(remote: str) -> types.RepoSlug:
                 "get-url",
                 remote,
             ]).strip().decode("utf-8"))
-    match = re.search(r"[:/]([^/]+)/([^.]+)(?:\.git)?", url)
+    match = re.search(r"[:/]([^/]+)/([^./]+)(?:\.git)?$", url)
     if not match:
         raise ValueError(f"Could not parse remote URL: {url}")
     return types.RepoSlug(match.group(1), match.group(2))
+
+
+def owner(remote: str) -> str:
+    """Get the owner of a remote."""
+    return remote_slug(remote).owner
 
 
 def remotes() -> list[str]:
@@ -300,13 +305,13 @@ def release_tag_exists(tag: str) -> bool:
     return tag in release_tags()
 
 
-def tag(tag: str, message: str) -> None:
+def tag(tag: str, message: str, sign: bool) -> None:
     """Create a signed tag with a message."""
     subprocess.run(  # nosec
         [
             "git",
             "tag",
-            "--sign",
+            *(["--sign"] if sign else []),
             "--annotate",
             "--message",
             message,
@@ -561,3 +566,36 @@ def commit(title: str, body: str) -> None:
         ],
         check=True,
     )
+
+
+def files_changed(commit: str) -> list[str]:
+    """Get a list of files changed in a commit."""
+    return subprocess.check_output(  # nosec
+        [
+            "git",
+            "diff",
+            "--name-only",
+            f"{commit}^",
+        ],
+        universal_newlines=True,
+    ).splitlines()
+
+
+def commit_message(commit_sha: str) -> str:
+    """Get the commit message of a commit."""
+    return subprocess.check_output(  # nosec
+        [
+            "git",
+            "show",
+            "--quiet",
+            "--format=%B",
+            commit_sha,
+        ],
+        universal_newlines=True,
+    )
+
+
+def is_up_to_date(branch: str, remote: str) -> bool:
+    """Check if a branch sha is equal to its remote counterpart."""
+    return branch in branches(remote) and branch_sha(branch) == branch_sha(
+        f"{remote}/{branch}")

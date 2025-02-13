@@ -37,7 +37,8 @@ def parse_args() -> Config:
 
 
 def needs_signing(name: str, asset_names: list[str]) -> bool:
-    return ".asc" not in name and name + ".asc" not in asset_names
+    return (not name.endswith(".sha256") and not name.endswith(".asc")
+            and name + ".asc" not in asset_names)
 
 
 def sign_binary(binary: str, tmpdir: str) -> None:
@@ -60,17 +61,22 @@ def upload_signature(tag: str, tmpdir: str, binary: str) -> None:
                             f)
 
 
-def download_and_sign_binaries(config: Config, tmpdir: str) -> None:
-    assets = github.release_assets(config.tag)
+def todo(tag: str) -> list[github.ReleaseAsset]:
+    assets = github.release_assets(tag)
     asset_names = [asset.name for asset in assets]
-    for asset in assets:
-        if needs_signing(asset.name, asset_names):
-            with open(os.path.join(tmpdir, asset.name), "wb") as f:
-                print(f"Downloading {asset.name}")
-                f.write(github.download_asset(asset.id))
-            sign_binary(asset.name, tmpdir)
-            if config.upload:
-                upload_signature(config.tag, tmpdir, asset.name)
+    return [
+        asset for asset in assets if needs_signing(asset.name, asset_names)
+    ]
+
+
+def download_and_sign_binaries(config: Config, tmpdir: str) -> None:
+    for asset in todo(config.tag):
+        with open(os.path.join(tmpdir, asset.name), "wb") as f:
+            print(f"Downloading {asset.name}")
+            f.write(github.download_asset(asset.id))
+        sign_binary(asset.name, tmpdir)
+        if config.upload:
+            upload_signature(config.tag, tmpdir, asset.name)
 
 
 def main(config: Config) -> None:

@@ -26,6 +26,8 @@ class Config:
     main_branch: str
     dryrun: bool
     force: bool
+    github_actions: bool
+    issue: int
     production: bool
     rebase: bool
     resume: bool
@@ -60,6 +62,19 @@ def parse_args() -> Config:
         action=argparse.BooleanOptionalAction,
         help="Force-push the release branch to origin (default on).",
         default=True,
+    )
+    parser.add_argument(
+        "--github-actions",
+        action=argparse.BooleanOptionalAction,
+        help="Running in GitHub Actions.",
+        default=False,
+    )
+    parser.add_argument(
+        "--issue",
+        type=int,
+        help=("Number of the release tracking issue. Default: none. "
+              "Required if running in GitHub Actions."),
+        default=0,
     )
     parser.add_argument(
         "--production",
@@ -105,6 +120,35 @@ def require(condition: bool, message: Optional[str] = None) -> None:
         raise stage.InvalidState(message or "Requirement not met")
 
 
+def assign_to_user(s: stage.Stage, issue_id: int,
+                   action: str) -> stage.UserAbort:
+    """Assign the issue to the acting user for them to take some action."""
+    issue = github.get_issue(issue_id)
+    github.issue_unassign(issue.number, ["toktok-releaser"])
+    github.issue_assign(issue.number, [github.actor()])
+    s.ok(f"Assigned to {github.actor()}")
+    return stage.UserAbort(f"Returning to the user to {action}")
+
+
+def stage_init(config: Config) -> None:
+    if config.github_actions and not config.issue:
+        raise ValueError(
+            "Issue number is required when running in GitHub Actions")
+    if config.issue:
+        with stage.Stage("Check issue",
+                         "Checking the release tracking issue") as s:
+            issue = github.get_issue(config.issue)
+            if "toktok-releaser" not in issue.assignees:
+                s.ok(f"Release issue {issue.html_url} is assigned to "
+                     f"{issue.assignees}, not toktok-releaser.")
+                raise stage.UserAbort("Assign the issue to toktok-releaser")
+            if not issue.title.startswith("Release tracking issue"):
+                # This is not a release issue.
+                raise assign_to_user(s, config.issue, "deal with the issue")
+            config.production = "Production release" in issue.body.splitlines()
+            s.ok(f"Processing release issue {issue.html_url}")
+
+
 def stage_version(config: Config) -> str:
     upstream = list({config.upstream, "origin"})
     with stage.Stage("Fetch upstream",
@@ -143,6 +187,10 @@ def release_commit_message(version: str) -> str:
     return f"chore: Release {version}"
 
 
+def release_issue_title(version: str) -> str:
+    return f"Release tracking issue: {version}"
+
+
 def stage_branch(config: Config, version: str) -> None:
     with stage.Stage("Create release branch",
                      "Creating a release branch") as s:
@@ -175,11 +223,39 @@ def stage_validate(config: Config) -> None:
     validate_pr.main(validate_pr.Config(commit=not config.verify))
 
 
+def extract_issue_release_notes(body: str) -> str:
+    """Extract the release notes from the issue body."""
+    start = body.find("### Release notes")
+    if start == -1:
+        return ""
+    end = body.find("### ", start + 1)
+    return body[start:end].strip()
+
+
 def stage_release_notes(config: Config, version: str) -> None:
     """Opens $EDITOR (from environment, or vim) to edit the release notes in CHANGELOG.md."""
     with stage.Stage("Write release notes", "Opening editor") as s:
         if config.resume and changelog.has_release_notes(version):
             s.ok("Skipping")
+        elif config.github_actions:
+            m = github.next_milestone()
+            tracking_issue = [
+                issue for issue in github.open_milestone_issues(m.number)
+                if "toktok-releaser" in issue.assignees
+            ]
+            if not tracking_issue:
+                raise s.fail("No tracking issue found")
+            if len(tracking_issue) > 1:
+                raise s.fail(
+                    "Multiple tracking issues found: "
+                    f"{', '.join(i.html_url for i in tracking_issue)}")
+            issue = tracking_issue[0]
+            notes = extract_issue_release_notes(issue.body)
+            if not notes:
+                raise s.fail("No release notes found in issue body")
+            changelog.set_release_notes(version, notes)
+            git.add("CHANGELOG.md")
+            s.ok(f"Release notes copied from {issue.html_url}")
         else:
             editor = os.getenv("EDITOR") or "vim"
             subprocess.run([editor, "CHANGELOG.md"], check=True)  # nosec
@@ -189,19 +265,35 @@ def stage_release_notes(config: Config, version: str) -> None:
 
 def stage_commit(version: str) -> None:
     with stage.Stage("Commit changes", "Committing changes") as s:
-        release_notes = changelog.get_release_notes(version)
+        release_notes = changelog.get_release_notes(version).notes + "\n"
         if git.is_clean():
             s.ok("No changes to commit")
-        else:
-            changes = git.changed_files()
-            git.commit(release_commit_message(version), release_notes)
-            s.ok(str(changes))
+            return
+
+        changes = git.changed_files()
+        git.commit(release_commit_message(version), release_notes)
+        s.ok(str(changes))
 
 
 def stage_push(config: Config) -> None:
     with stage.Stage("Push changes", "Pushing changes to origin") as s:
+        release_branch = git.current_branch()
+        if git.is_up_to_date(release_branch, config.upstream):
+            s.ok("No changes to push")
+            return
+
         if config.dryrun:
             s.ok("Dry run; not pushing changes")
+        elif config.github_actions:
+            sha = github.push_signed(
+                git.remote_slug(config.upstream),
+                git.branch_sha(release_branch),
+                config.main_branch,
+                release_branch,
+            )
+            git.fetch(config.upstream)
+            git.reset(sha)
+            s.ok(sha)
         else:
             git.push("origin", git.current_branch(), force=config.force)
             s.ok()
@@ -253,11 +345,11 @@ def stage_pull_request(
     with stage.Stage("Create pull request",
                      "Creating a pull request on GitHub") as s:
         title = f"chore: Release {version}"
-        body = changelog.get_release_notes(version)
-        head = f"{github.actor()}:{BRANCH_PREFIX}/{version}"
+        body = changelog.get_release_notes(version).notes
+        head = f"{git.owner('origin')}:{BRANCH_PREFIX}/{version}"
         base = config.main_branch
         milestone = github.next_milestone()
-        existing_pr = github.find_pr_for_branch(head, base)
+        existing_pr = github.find_pr_for_branch(head, base, "open")
         if config.dryrun:
             s.ok("Dry run; not creating a pull request")
             print(f"title: {title}")
@@ -283,6 +375,8 @@ def stage_pull_request(
             s.ok(f"Modified PR: {existing_pr.html_url}")
             return existing_pr
 
+        s.progress(f"Creating PR: {title} ({head} -> {base}) "
+                   f"on milestone {milestone.number}")
         pr = github.create_pr(title, patch_pr_body("", body), head, base,
                               milestone.number)
         s.ok(pr.html_url)
@@ -323,7 +417,7 @@ def await_head_pr(config: Config, s: stage.Stage,
 
 def stage_await_checks(config: Config, version: str) -> None:
     with stage.Stage("Await checks", "Waiting for checks to pass") as s:
-        for _ in range(60):  # 60 * 30s = 30 minutes
+        for _ in range(120):  # 120 * 30s = 1 hour
             pr = await_head_pr(config, s, version)
 
             checks = github.checks(pr.head_sha)
@@ -385,6 +479,7 @@ def stage_production_ready(config: Config, version: str) -> None:
             issues = [
                 i for i in github.open_milestone_issues(m.number)
                 if i.title != release_commit_message(version)
+                and i.number != config.issue
             ]
             if issues:
                 raise s.fail(f"{len(issues)} issues are still open for "
@@ -392,6 +487,21 @@ def stage_production_ready(config: Config, version: str) -> None:
             s.ok(f"No open issues for {version}")
         else:
             s.ok("Release candidate; not checking milestone")
+
+
+def stage_rename_issue(config: Config, version: str) -> None:
+    with stage.Stage("Rename issue",
+                     "Renaming the release tracking issue") as s:
+        if not config.issue:
+            s.ok("No issue to rename")
+            return
+        title = release_issue_title(version)
+        issue = github.get_issue(config.issue)
+        if issue.title == title:
+            s.ok(f"Issue already named '{title}'")
+            return
+        github.rename_issue(config.issue, title)
+        s.ok(f"Issue renamed to '{title}'")
 
 
 def stage_ready_for_review(config: Config, version: str) -> None:
@@ -413,7 +523,7 @@ def stage_await_merged(config: Config, version: str) -> None:
     We don't merge the PR ourselves, but wait for automerge to do it.
     """
     with stage.Stage("Await merged", "Waiting for the PR to be merged") as s:
-        for _ in range(20):  # 20 * 30s = 10 minutes
+        for _ in range(120):  # 120 * 30s = 1 hour
             pr = get_head_pr(config, version)
             if not pr:
                 raise s.fail(f"PR not found for {version}")
@@ -438,10 +548,11 @@ def stage_await_master_build(config: Config, version: str) -> None:
             "Await master build",
             f"Waiting for the {config.main_branch} branch to be built",
     ) as s:
-        for _ in range(20):  # 20 * 30s = 10 minutes
+        for _ in range(120):  # 120 * 30s = 1 hour
             head_sha = git.branch_sha(config.main_branch)
             builds = [
                 run for run in github.action_runs(config.main_branch, head_sha)
+                if run.event != "issues"
             ]
             if not builds:
                 s.progress(
@@ -465,13 +576,28 @@ def stage_await_master_build(config: Config, version: str) -> None:
 def stage_tag(config: Config, version: str) -> None:
     """Tag the release with and push it to upstream."""
     with stage.Stage("Tag release", "Tagging the release") as s:
+        release_notes = changelog.get_release_notes(version).notes + "\n"
         if git.release_tag_exists(version):
             s.progress(f"Tag {version} already exists")
+            if config.github_actions:
+                s.ok("No tag push required")
+                return
         else:
-            git.tag(version, changelog.get_release_notes(version))
+            git.tag(version, release_notes, sign=not config.github_actions)
             s.progress(f"Tagged {version}")
+
         if config.dryrun:
             s.ok("Dry run; not pushing tag")
+        elif config.github_actions and not config.dryrun:
+            s.progress(f"Pushing tag {version} with GitHub API")
+            sha = github.tag(
+                git.remote_slug(config.upstream),
+                git.branch_sha(version),
+                version,
+                release_notes,
+            )
+            git.fetch(config.upstream)
+            s.ok(f"Tagged {version} @ {sha}")
         else:
             git.push(config.upstream, version, force=config.force)
             s.ok(f"Pushed tag {version} to {config.upstream}")
@@ -484,24 +610,42 @@ def stage_build_binaries(config: Config, version: str) -> None:
     """
     with stage.Stage("Build binaries",
                      "Waiting for binaries to be built") as s:
-        for _ in range(20):  # 20 * 30s = 10 minutes
+        head_sha = git.branch_sha(version)
+        for _ in range(6):  # 6 * 10s = 1 minute
+            # Fetch the latest commits to get the latest head_sha. In case we're
+            # running on GitHub Actions, we need to wait for a human to sign the
+            # tag, which will have a different head_sha.
+            git.fetch(config.upstream)
             head_sha = git.branch_sha(version)
-            builds = [
-                run for run in github.action_runs(version, head_sha)
-                if run.path == ".github/workflows/build-test-deploy.yaml"
-            ]
+            builds = [run for run in github.action_runs(version, head_sha)]
+            if builds:
+                break
+            s.progress("Waiting for builds to start for "
+                       f"{version} @ {head_sha}")
+            stage.sleep(10)
+        else:
+            if config.github_actions:
+                s.ok("No builds found; waiting for a human to sign the tag")
+                raise assign_to_user(s, config.issue, "sign the tag")
+
+        for _ in range(120):  # 120 * 30s = 1 hour
+            builds = [run for run in github.action_runs(version, head_sha)]
             if not builds:
                 s.progress("Waiting for builds to start for "
                            f"{version} @ {head_sha}")
                 stage.sleep(10)
                 continue
-            build = builds[0]
-            if build.conclusion == "failure":
-                raise s.fail(f"Binaries failed to build: {build.html_url}")
-            if build.status == "completed":
-                s.ok("Binaries built")
+            for build in builds:
+                if build.conclusion == "failure":
+                    raise s.fail(f"Binaries failed to build: {build.html_url}")
+            todo = [build for build in builds if build.status != "completed"]
+            if not todo:
+                s.ok(f"Binaries built: {len(builds)} workflows completed "
+                     f"for {head_sha}")
+                # Clear cache so the newly created release tag is visible.
+                github.clear_cache()
                 return
-            s.progress(f"Binaries still building: {build.html_url}")
+            s.progress(f"Binaries still building: {builds[0].html_url}")
             stage.sleep(30)
         raise s.fail("Timeout waiting for binaries to be built")
 
@@ -509,12 +653,12 @@ def stage_build_binaries(config: Config, version: str) -> None:
 def has_tarballs(version: str) -> bool:
     """Check if there are tarball assets for the given version.
 
-    Tarball assets are $version.tar.{gz,xz} and $version.tar.{gz,xz}.asc.
+    Tarball assets are $version.tar.{gz,xz}.
     """
     assets = github.release_assets(version)
     return all(
-        any(a.name == f"{version}.tar.{ext}{asc}" for a in assets)
-        for ext in ("gz", "xz") for asc in ("", ".asc"))
+        any(a.name == f"{version}.tar.{ext}" for a in assets)
+        for ext in ("gz", "xz"))
 
 
 def stage_create_tarballs(version: str) -> None:
@@ -527,8 +671,16 @@ def stage_create_tarballs(version: str) -> None:
             s.ok("Tarballs created")
 
 
-def stage_sign_release_assets(version: str) -> None:
+def stage_sign_release_assets(config: Config, version: str) -> None:
     with stage.Stage("Sign release assets", "Signing release assets") as s:
+        if config.github_actions:
+            assets = sign_release_assets.todo(version)
+            if not assets:
+                s.ok("All release assets have been signed")
+                return
+            s.progress(f"{len(assets)} release assets need signing")
+            raise assign_to_user(s, config.issue, "sign the assets")
+
         sign_release_assets.main(
             sign_release_assets.Config(upload=True, tag=version))
         s.ok("Release assets signed")
@@ -540,11 +692,61 @@ def stage_verify_release_assets(version: str) -> None:
         s.ok("Release assets verified")
 
 
+def stage_format_release_notes(config: Config, version: str) -> None:
+    with stage.Stage("Format release notes",
+                     "Formatting release notes on GitHub release") as s:
+        release_notes = changelog.get_release_notes(version)
+        github.set_release_notes(
+            version,
+            release_notes.formatted(),
+            prerelease=not config.production,
+        )
+        s.ok("Release notes formatted")
+
+
+def stage_publish_release(config: Config, version: str) -> None:
+    with stage.Stage("Publish release", "Publishing the release") as s:
+        if github.release_is_published(version):
+            s.ok("Release already published")
+            return
+        if config.github_actions:
+            s.ok("Asking user to publish the release")
+            raise assign_to_user(s, config.issue, "publish the release")
+        s.ok("Not implemented yet")
+
+
+def stage_close_milestone(version: str) -> None:
+    with stage.Stage("Close milestone", "Closing the release milestone") as s:
+        m = github.next_milestone()
+        if m.title != version:
+            raise s.fail(f"Milestone {m.title} is not the next milestone")
+        github.close_milestone(m.number)
+        s.ok(f"Milestone {m.title} closed")
+
+
+def stage_close_issue(config: Config) -> None:
+    with stage.Stage("Close issue", "Closing the release tracking issue") as s:
+        if not config.issue:
+            s.ok("No issue to close")
+            return
+        issue = github.get_issue(config.issue)
+        if issue.state == "closed":
+            s.ok("Issue already closed")
+            return
+        github.close_issue(config.issue)
+        s.ok(f"Issue {config.issue} closed")
+
+
 def run_stages(config: Config) -> None:
     require(git.current_branch() == config.branch)
     require(git.is_clean())
 
+    stage_init(config)
+
     version = stage_version(config)
+    stage_rename_issue(config, version)
+    stage_production_ready(config, version)
+
     if release_commit_message(version) not in git.log(config.main_branch):
         stage_branch(config, version)
         stage_validate(config)
@@ -553,7 +755,6 @@ def run_stages(config: Config) -> None:
         stage_push(config)
         stage_pull_request(config, version)
         stage_await_checks(config, version)
-        stage_production_ready(config, version)
         if config.verify:
             # We're done for now. On CI, we're not allowed to mark the PR as
             # ready for review, so we just end the checks here.
@@ -567,8 +768,12 @@ def run_stages(config: Config) -> None:
     stage_tag(config, version)
     stage_build_binaries(config, version)
     stage_create_tarballs(version)
-    stage_sign_release_assets(version)
+    stage_sign_release_assets(config, version)
     stage_verify_release_assets(version)
+    stage_format_release_notes(config, version)
+    stage_publish_release(config, version)
+    stage_close_milestone(version)
+    stage_close_issue(config)
 
 
 def main(config: Config) -> None:
@@ -585,8 +790,8 @@ def main(config: Config) -> None:
                 # Undo any partial changes if the script is aborted.
                 with git.ResetOnExit():
                     run_stages(config)
-    except stage.UserAbort:
-        print("User aborted the program.")
+    except stage.UserAbort as e:
+        print(e.message)
         return
 
 
