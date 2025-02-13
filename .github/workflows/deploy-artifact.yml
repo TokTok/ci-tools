@@ -1,0 +1,85 @@
+on:
+  workflow_call:
+    inputs:
+      project-name:
+        description: 'Name of the application to build (e.g. qTox)'
+        required: true
+        type: string
+      artifact-source:
+        description: 'Artifact produced by the command (e.g. qTox.AppImage)'
+        required: true
+        type: string
+      artifact:
+        description: 'File name format for the artifact (e.g. qTox-$VERSION.AppImage)'
+        required: true
+        type: string
+      build:
+        description: 'Name of the build (e.g. appimage, flatpak, macos)'
+        required: true
+        type: string
+      run:
+        description: 'Command to run to build the artifact'
+        required: true
+        type: string
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run build
+        run: ${{ inputs.run }}
+      - name: Generate sha256 checksum
+        run: sha256sum ${{ inputs.artifact-source }} >${{ inputs.artifact-source }}.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-${{ github.sha }}-${{ inputs.build }}
+          path: |
+            ${{ inputs.artifact-source }}
+            ${{ inputs.artifact-source }}.sha256
+          if-no-files-found: error
+      - name: Compute release file name
+        if: contains(github.ref, 'refs/tags/v')
+        id: release-version
+        run: |
+          VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)"
+          echo "artifact=${{ inputs.artifact }}" >>$GITHUB_OUTPUT
+      - name: Rename artifact for release upload
+        if: contains(github.ref, 'refs/tags/v')
+        run: |
+          cp "${{ inputs.artifact-source }}"        "${{ steps.release-version.outputs.artifact }}"
+          cp "${{ inputs.artifact-source }}.sha256" "${{ steps.release-version.outputs.artifact }}.sha256"
+      - name: Upload to versioned release
+        if: contains(github.ref, 'refs/tags/v')
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          draft: true
+          artifacts: "${{ steps.release-version.outputs.artifact }},${{ steps.release-version.outputs.artifact }}.sha256"
+      - name: Compute nightly file name
+        id: nightly-version
+        run: |
+          VERSION="nightly"
+          echo "artifact=${{ inputs.artifact }}" >>$GITHUB_OUTPUT
+      - name: Rename artifact for nightly upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          cp "${{ inputs.artifact-source }}"        "${{ steps.nightly-version.outputs.artifact }}"
+          cp "${{ inputs.artifact-source }}.sha256" "${{ steps.nightly-version.outputs.artifact }}.sha256"
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: "${{ steps.nightly-version.outputs.artifact }},${{ steps.nightly-version.outputs.artifact }}.sha256"

@@ -1,0 +1,124 @@
+on:
+  workflow_call:
+    inputs:
+      project-name:
+        description: 'Name of the application to build (e.g. qTox)'
+        required: true
+        type: string
+      cmake-args:
+        description: 'Arguments to pass to CMake'
+        required: false
+        type: string
+      production:
+        description: |
+          Whether to upload the release to the GitHub release page, i.e.
+          the Android build is of production quality. If false, the build
+          will be uploaded to the nightly release page only.
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        arch: [armeabi-v7a, arm64-v8a]
+        build-type: [Debug, Release]
+        version: [6.2.4, 6.8.1]
+        exclude:
+          - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'armeabi-v7a' }}
+          - build-type: ${{ (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') || contains(github.ref, 'refs/tags/v')) && 'Debug' }}
+          - version: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '6.8.1' }}
+    steps:
+      - name: Compute values for remaining steps
+        id: computed
+        run: |
+          ARTIFACT_TYPE="$(echo '${{ matrix.build-type }}' | tr '[:upper:]' '[:lower:]')"
+          echo "artifact_type=$ARTIFACT_TYPE" >>$GITHUB_OUTPUT
+          if [ "${{ matrix.version }}" == "6.2.4" ]; then
+            SUFFIX="-android7"
+            echo "built_apk=_build/android-build/build/outputs/apk/debug/android-build-debug.apk" >>$GITHUB_OUTPUT
+          else
+            SUFFIX=""
+            echo "built_apk=_build/android-build/build/outputs/apk/$ARTIFACT_TYPE/android-build-$ARTIFACT_TYPE-signed.apk" >>$GITHUB_OUTPUT
+          fi
+          echo "suffix=$SUFFIX" >>$GITHUB_OUTPUT
+          echo "nightly_apk=${{ inputs.project-name }}-nightly-${{ matrix.arch }}-$ARTIFACT_TYPE$SUFFIX.apk" >>$GITHUB_OUTPUT
+          echo "docker_image=android_builder.${{ matrix.arch }}.${ARTIFACT_TYPE}_${{ matrix.version }}" >>$GITHUB_OUTPUT
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch build scripts
+        run: |
+          git clone --depth=1 https://github.com/TokTok/dockerfiles "third_party/dockerfiles"
+          cp third_party/dockerfiles/docker-compose.yml .
+      - name: Determine artifact file name
+        id: artifact
+        run: |
+          ARTIFACT="${{ steps.computed.outputs.built_apk }}"
+          echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
+          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-android-${{ matrix.arch }}-${{ matrix.build-type }}-${{ matrix.version }}" >>$GITHUB_OUTPUT
+      - name: Cache compiler output
+        uses: actions/cache@v4
+        with:
+          path: .cache/ccache
+          key: ${{ github.job }}-android-${{ matrix.arch }}-${{ matrix.build-type }}-${{ matrix.version }}-ccache
+      - name: Download Docker image
+        run: docker compose run --rm ${{ steps.computed.outputs.docker_image }} uname -a
+      - name: Run build
+        run: docker compose run
+          --rm
+          ${{ steps.computed.outputs.docker_image }}
+          platform/android/cross-compile/build.sh
+          --arch ${{ matrix.arch }}
+          --build-type ${{ matrix.build-type }}
+          --
+          ${{ inputs.cmake-args }}
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact-ref }}
+          path: |
+            ${{ steps.artifact.outputs.artifact }}
+            ${{ steps.artifact.outputs.artifact }}.sha256
+          if-no-files-found: error
+      - name: Get tag name for Android release file name
+        if: contains(github.ref, 'refs/tags/v')
+        id: get_version
+        run: |
+          VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)"
+          echo "release_apk=${{ inputs.project-name }}-$VERSION-${{ matrix.arch }}-${{ steps.computed.outputs.artifact_type }}${{ steps.computed.outputs.suffix }}.apk" >>$GITHUB_OUTPUT
+      - name: Rename Android APK for release upload
+        if: contains(github.ref, 'refs/tags/v')
+        run: |
+          cp "${{ steps.computed.outputs.built_apk }}" "${{ steps.get_version.outputs.release_apk }}"
+          sha256sum "${{ steps.get_version.outputs.release_apk }}" > "${{ steps.get_version.outputs.release_apk }}.sha256"
+      - name: Upload to versioned release
+        if: inputs.production && contains(github.ref, 'refs/tags/v')
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          draft: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "${{ steps.get_version.outputs.release_apk }},${{ steps.get_version.outputs.release_apk }}.sha256"
+      - name: Rename Android APK for nightly upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          cp "${{ steps.computed.outputs.built_apk }}" "${{ steps.computed.outputs.nightly_apk }}"
+          sha256sum "${{ steps.computed.outputs.nightly_apk }}" > "${{ steps.computed.outputs.nightly_apk }}.sha256"
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          artifacts: "${{ steps.computed.outputs.nightly_apk }},${{ steps.computed.outputs.nightly_apk }}.sha256"

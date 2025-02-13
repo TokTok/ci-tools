@@ -1,0 +1,176 @@
+on:
+  workflow_call:
+    inputs:
+      project-name:
+        description: 'Name of the application to build (e.g. qTox).'
+        required: true
+        type: string
+      cmake-args:
+        description: 'Arguments to pass to CMake.'
+        required: false
+        type: string
+      need-qt:
+        description: |
+          Whether the project needs Qt (built from source); default is true. Set
+          to false if the project doesn't need Qt to save time.
+        required: false
+        type: boolean
+        default: true
+      smoke-test:
+        description: 'Command to run to smoke test the AppImage.'
+        required: true
+        type: string
+      test-files:
+        description: |
+          List of test files needed to checkout from the repository. If your
+          smoke-test script is local to the repository, it needs to be
+          listed here.
+        required: false
+        type: string
+
+jobs:
+  build:
+    name: Build
+    strategy:
+      matrix:
+        arch: [i686, x86_64]
+        build-type: [Debug, Release]
+        exclude:
+          - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'i686' }}
+          - build-type: ${{ (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') || contains(github.ref, 'refs/tags/v')) && 'Debug' }}
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
+    outputs:
+      artifact: ${{ steps.artifact.outputs.artifact }}
+      artifact-ref: ${{ steps.artifact.outputs.artifact-ref }}
+      binary-name: ${{ steps.artifact.outputs.binary-name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch build scripts
+        run: |
+          git clone --depth=1 https://github.com/TokTok/dockerfiles third_party/dockerfiles
+          cp third_party/dockerfiles/docker-compose.yml .
+      - name: Determine artifact file name
+        id: artifact
+        run: |
+          BINARY_NAME="$(echo ${{ inputs.project-name }} | tr '[:upper:]' '[:lower:]')"
+          ARTIFACT="setup-$BINARY_NAME.exe"
+          echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
+          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "binary-name=$BINARY_NAME" >>$GITHUB_OUTPUT
+      - name: Cache compiler output
+        uses: actions/cache@v4
+        with:
+          path: .cache/ccache
+          key: ${{ github.job }}-windows-${{ matrix.arch }}-${{ matrix.build-type }}-ccache
+      - name: Download Docker image
+        run: docker compose run --rm windows_builder.${{ matrix.arch }} uname -a
+      - name: Run build
+        run: docker compose run
+          --rm
+          windows_builder.${{ matrix.arch }}
+          platform/windows/cross-compile/build.sh
+          --project-name ${{ inputs.project-name }}
+          --arch ${{ matrix.arch }}
+          --build-type ${{ matrix.build-type }}
+          --run-tests
+          --src-dir /qtox
+          --
+          ${{ inputs.cmake-args }}
+      - name: Upload installer
+        if: matrix.build-type == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact-ref }}
+          path: package-prefix/${{ steps.artifact.outputs.artifact }}
+          if-no-files-found: error
+      - name: Upload zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-${{ github.sha }}-windows-zip-${{ matrix.build-type }}-${{ matrix.arch }}
+          path: install-prefix/${{ steps.artifact.outputs.binary-name }}-${{ matrix.arch }}-${{ matrix.build-type }}.zip
+          if-no-files-found: error
+      - name: Rename exe for release upload
+        if: contains(github.ref, 'refs/tags/v')
+        run: |
+          cp package-prefix/setup-${{ steps.artifact.outputs.binary-name }}.exe setup-${{ steps.artifact.outputs.binary-name }}-${{ matrix.arch }}-release.exe
+          sha256sum setup-${{ steps.artifact.outputs.binary-name }}-${{ matrix.arch }}-release.exe > setup-${{ steps.artifact.outputs.binary-name }}-${{ matrix.arch }}-release.exe.sha256
+      - name: Upload to versioned release
+        if: contains(github.ref, 'refs/tags/v')
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          draft: true
+          artifacts: "setup-${{ steps.artifact.outputs.binary-name }}-${{ matrix.arch }}-release.exe,setup-${{ steps.artifact.outputs.binary-name }}-${{ matrix.arch }}-release.exe.sha256"
+      - name: Rename zip for nightly upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          cp install-prefix/${{ steps.artifact.outputs.binary-name }}-${{ matrix.arch }}-${{ matrix.build-type }}.zip ${{ steps.artifact.outputs.binary-name }}-nightly-${{ matrix.arch }}-${{ matrix.build-type }}.zip
+          sha256sum ${{ steps.artifact.outputs.binary-name }}-nightly-${{ matrix.arch }}-${{ matrix.build-type }}.zip > ${{ steps.artifact.outputs.binary-name }}-nightly-${{ matrix.arch }}-${{ matrix.build-type }}.zip.sha256
+      - name: Upload zip to nightly release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: "${{ steps.artifact.outputs.binary-name }}-nightly-${{ matrix.arch }}-${{ matrix.build-type }}.zip,${{ steps.artifact.outputs.binary-name }}-nightly-${{ matrix.arch }}-${{ matrix.build-type }}.zip.sha256"
+      - name: Rename exe for nightly upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && matrix.build-type == 'release'
+        run: |
+          cp package-prefix/setup-${{ steps.artifact.outputs.binary-name }}.exe ${{ steps.artifact.outputs.binary-name }}-nightly-${{ matrix.arch }}-${{ matrix.build-type }}.exe
+          sha256sum ${{ steps.artifact.outputs.binary-name }}-nightly-${{ matrix.arch }}-${{ matrix.build-type }}.exe > ${{ steps.artifact.outputs.binary-name }}-nightly-${{ matrix.arch }}-${{ matrix.build-type }}.exe.sha256
+      - name: Upload exe to nightly release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && matrix.build-type == 'release'
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: "${{ steps.artifact.outputs.binary-name }}-nightly-${{ matrix.arch }}-${{ matrix.build-type }}.exe,${{ steps.artifact.outputs.binary-name }}-nightly-${{ matrix.arch }}-${{ matrix.build-type }}.exe.sha256"
+
+  test:
+    name: Test
+    needs: [build]
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        arch: [i686, x86_64]
+        build-type: [Release]
+        exclude:
+          - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'i686' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch tags if we're not already in a tag build.
+          fetch-tags: ${{ !contains(github.ref, 'refs/tags/v') }}
+          sparse-checkout: ${{ inputs.test-files }}
+      - name: Determine artifact file name
+        id: artifact
+        shell: bash
+        run: |
+          BINARY_NAME="$(echo ${{ inputs.project-name }} | tr '[:upper:]' '[:lower:]')"
+          ARTIFACT="setup-$BINARY_NAME.exe"
+          echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
+          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "binary-name=$BINARY_NAME" >>$GITHUB_OUTPUT
+      - name: Download artifact from build step
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact-ref }}
+      - name: Install 7zip
+        run: choco install -y 7zip
+      - name: Unpack exe
+        run: 7z x ${{ steps.artifact.outputs.artifact }} -o${{ steps.artifact.outputs.binary-name }}
+      - name: Run application binary
+        shell: bash
+        run: ${{ inputs.smoke-test }} ${{ steps.artifact.outputs.binary-name }}/bin/${{ steps.artifact.outputs.binary-name }}.exe

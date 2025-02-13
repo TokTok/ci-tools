@@ -1,0 +1,231 @@
+on:
+  workflow_call:
+    inputs:
+      project-name:
+        description: 'Name of the application to build (e.g. qTox).'
+        required: true
+        type: string
+      cmake-args:
+        description: 'Arguments to pass to CMake.'
+        required: false
+        type: string
+      need-qt:
+        description: |
+          Whether the project needs Qt (built from source); default is
+          true. Set to false if the project doesn't need Qt to save time.
+        required: false
+        type: boolean
+        default: true
+      screenshot:
+        description: |
+          Whether the smoke-test will output a screenshot. If true, the
+          screenshot will be uploaded as an artifact. The smoke-test script
+          must output the screenshot to the file named by the
+          $QTOX_SCREENSHOT environment variable.
+        required: false
+        type: boolean
+      smoke-test:
+        description: 'Command to run to smoke test the AppImage.'
+        required: true
+        type: string
+      test-files:
+        description: |
+          List of test files needed to checkout from the repository. If your
+          smoke-test script is local to the repository, it needs to be
+          listed here.
+        required: false
+        type: string
+    secrets:
+      APPLE_BUILD_CERTIFICATE_BASE64:
+        description: 'Base64-encoded Apple build certificate.'
+        required: false
+      APPLE_KEYCHAIN_PASSWORD:
+        description: 'Password for the Apple keychain.'
+        required: false
+      APPLE_P12_PASSWORD:
+        description: 'Password for the Apple P12 certificate.'
+        required: false
+
+jobs:
+  build:
+    name: Build
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+        macos: ["10.15", "12.0"]
+        exclude:
+          - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'x86_64' }}
+          - macos: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '12.0' }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'macos-14' || 'macos-13' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch build scripts
+        run: |
+          git clone --depth=1 https://github.com/TokTok/ci-tools third_party/ci-tools
+          git clone --depth=1 https://github.com/TokTok/dockerfiles third_party/dockerfiles
+          cp third_party/dockerfiles/docker-compose.yml .
+      - name: Determine artifact file name
+        id: artifact
+        run: |
+          ARTIFACT="${{ inputs.project-name }}-${{ matrix.arch }}-${{ matrix.macos }}.dmg"
+          echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
+          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-macos-${{ matrix.macos }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+      - name: Download Qt
+        if: inputs.need-qt
+        run: third_party/dockerfiles/qtox/deps/download_qt.sh
+          --arch ${{ matrix.arch }}
+          --macos-version ${{ matrix.macos }}
+          --dep-prefix /Users/runner/work/deps
+      - name: Cache dependencies (except Qt)
+        id: cache-deps
+        uses: actions/cache@v4
+        with:
+          path: |
+            /Users/runner/work/deps/bin
+            /Users/runner/work/deps/include
+            /Users/runner/work/deps/lib
+            /Users/runner/work/deps/share
+          key: ${{ github.job }}-macos-distributable-${{ matrix.arch }}-${{ matrix.macos }}-deps
+      - name: Homebrew dependencies to build dependencies
+        run: |
+          brew bundle --file platform/macos/Brewfile-static
+          sed -i '' -e 's/MAXIMUM_UNMOUNTING_ATTEMPTS=3/MAXIMUM_UNMOUNTING_ATTEMPTS=15/' "$(realpath "$(which create-dmg)")"
+      - name: Build dependencies
+        if: steps.cache-deps.outputs.cache-hit != 'true'
+        run: third_party/dockerfiles/qtox/deps/local_install_deps.sh
+          --arch ${{ matrix.arch }}
+          --macos-version ${{ matrix.macos }}
+          --dep-file platform/deps.depfile
+          --dep-prefix /Users/runner/work/deps
+      - name: Install the Apple certificate
+        env:
+          BUILD_CERTIFICATE_BASE64: ${{ secrets.APPLE_BUILD_CERTIFICATE_BASE64 }}
+          P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
+        run: third_party/ci-tools/scripts/install_apple_cert.sh >/dev/null
+      - name: Cache compiler output
+        uses: actions/cache@v4
+        with:
+          path: .cache/ccache
+          key: ${{ github.job }}-macos-distributable-${{ matrix.arch }}-${{ matrix.macos }}-ccache
+      - name: Set up ccache
+        run: ccache
+          --set-config=max_size=200M
+          --set-config=cache_dir="$PWD/.cache/ccache" && ccache --show-config
+      - name: Build application bundle
+        run: platform/macos/build.sh
+          --project-name ${{ inputs.project-name }}
+          --build-type dist
+          --arch "${{ matrix.arch }}"
+          --macos-version "${{ matrix.macos }}"
+          --dep-prefix /Users/runner/work/deps
+          --
+          ${{ inputs.cmake-args }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact-ref }}
+          path: |
+            ${{ steps.artifact.outputs.artifact }}
+            ${{ steps.artifact.outputs.artifact }}.sha256
+          if-no-files-found: error
+      - name: Get tag name for release file name
+        if: contains(github.ref, 'refs/tags/v')
+        id: get_version
+        run: |
+          VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)"
+          echo "version_tag=$VERSION" >>$GITHUB_OUTPUT
+          echo "release_artifact=${{ inputs.project-name }}-$VERSION.${{ matrix.arch }}-${{ matrix.macos }}.dmg" >>$GITHUB_OUTPUT
+      - name: Rename artifact for release upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          cp "${{ steps.artifact.outputs.artifact }}"        "${{ steps.get_version.outputs.release_artifact }}"
+          cp "${{ steps.artifact.outputs.artifact }}.sha256" "${{ steps.get_version.outputs.release_artifact }}.sha256"
+      - name: Upload to versioned release
+        if: contains(github.ref, 'refs/tags/v')
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          draft: true
+          artifacts: "${{ steps.get_version.outputs.release_artifact }},${{ steps.get_version.outputs.release_artifact }}.sha256"
+      - name: Rename artifact for nightly upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          cp "${{ steps.artifact.outputs.artifact }}"        ${{ inputs.project-name }}-nightly-${{ matrix.arch }}-${{ matrix.macos }}.dmg
+          cp "${{ steps.artifact.outputs.artifact }}.sha256" ${{ inputs.project-name }}-nightly-${{ matrix.arch }}-${{ matrix.macos }}.dmg.sha256
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: "${{ inputs.project-name }}-nightly-${{ matrix.arch }}-${{ matrix.macos }}.dmg,${{ inputs.project-name }}-nightly-${{ matrix.arch }}-${{ matrix.macos }}.dmg.sha256"
+
+  test:
+    name: Test
+    needs: [build]
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+        macos: ["10.15", "12.0"]
+        exclude:
+          - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'x86_64' }}
+          - macos: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '12.0' }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'macos-14' || 'macos-13' }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch tags if we're not already in a tag build.
+          fetch-tags: ${{ !contains(github.ref, 'refs/tags/v') }}
+          sparse-checkout: ${{ inputs.test-files }}
+      - name: Determine artifact file name
+        id: artifact
+        run: |
+          ARTIFACT="${{ inputs.project-name }}-${{ matrix.arch }}-${{ matrix.macos }}.dmg"
+          echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
+          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-macos-${{ matrix.macos }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "binary-name=$(echo ${{ inputs.project-name }} | tr '[:upper:]' '[:lower:]')" >>$GITHUB_OUTPUT
+      - name: Download artifact from build step
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact-ref }}
+      - name: Install 7zip
+        run: brew install 7zip
+      - name: Unpack dmg
+        run: 7zz x ${{ steps.artifact.outputs.artifact }} ${{ steps.artifact.outputs.binary-name }}.app
+      - name: Run application binary
+        id: run
+        run: |
+          ${{ inputs.smoke-test }} ${{ steps.artifact.outputs.binary-name }}.app/Contents/MacOS/${{ steps.artifact.outputs.binary-name }}
+          echo "screenshot=$QTOX_SCREENSHOT" >>$GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QTOX_SCREENSHOT: ${{ inputs.screenshot && format('{0}-macos-{1}-{2}.png', inputs.project-name, matrix.arch, matrix.macos) }}
+      - name: Upload screenshot artifact
+        if: inputs.screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.run.outputs.screenshot }}
+          path: ${{ steps.run.outputs.screenshot }}
+      - name: Upload screenshot to nightly release
+        if: inputs.screenshot && github.event_name == 'push' && github.ref == 'refs/heads/master'
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: ${{ steps.run.outputs.screenshot }}

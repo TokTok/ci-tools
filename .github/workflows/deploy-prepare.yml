@@ -1,0 +1,13 @@
+on: [workflow_call]
+
+jobs:
+  update-nightly-tag:
+    name: Update nightly release tag
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Move nightly tag to head for nightly release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: git tag -f nightly && git push origin nightly -f

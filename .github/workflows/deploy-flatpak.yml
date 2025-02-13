@@ -1,0 +1,160 @@
+on:
+  workflow_call:
+    inputs:
+      project-name:
+        description: 'Name of the application to build (e.g. qTox)'
+        required: true
+        type: string
+      org-name:
+        description: 'Reverse domain name of the organization to build (e.g. chat.tox)'
+        required: false
+        type: string
+        default: 'chat.tox'
+      screenshot:
+        description: |
+          Whether the smoke-test will output a screenshot. If true, the
+          screenshot will be uploaded as an artifact. The smoke-test script
+          must output the screenshot to the file named by the
+          $QTOX_SCREENSHOT environment variable.
+        required: false
+        type: boolean
+      smoke-test:
+        description: 'Command to run to smoke test the AppImage'
+        required: true
+        type: string
+      test-files:
+        description: |
+          List of test files needed to checkout from the repository. If your
+          smoke-test script is local to the repository, it needs to be
+          listed here.
+        required: false
+        type: string
+
+jobs:
+  build:
+    name: Build
+    permissions:
+      contents: write
+    strategy:
+      matrix:
+        arch: [x86_64]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch build scripts
+        run: |
+          git clone --depth=1 https://github.com/TokTok/dockerfiles "third_party/dockerfiles"
+          cp third_party/dockerfiles/docker-compose.yml .
+      - name: Determine artifact file name
+        id: artifact
+        run: |
+          ARTIFACT="${{ inputs.project-name }}.flatpak"
+          echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
+          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-flatpak-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "binary-name=$(echo ${{ inputs.project-name }} | tr '[:upper:]' '[:lower:]')" >>$GITHUB_OUTPUT
+      - name: Cache flatpak-builder cache (except ccache)
+        uses: actions/cache@v4
+        with:
+          path: |
+            .flatpak-builder/cache
+            .flatpak-builder/checksums
+            .flatpak-builder/downloads
+          key: ${{ github.job }}-flatpak-builder
+      - name: Cache flatpak-builder cache (only ccache)
+        uses: actions/cache@v4
+        with:
+          path: .flatpak-builder/ccache
+          key: ${{ github.job }}-flatpak-ccache
+      - name: Download Docker image
+        run: docker compose run --rm flatpak uname -a
+      - name: Run build
+        run: docker compose run
+          --rm
+          flatpak
+          platform/flatpak/build.sh
+          ${{ inputs.project-name }}
+          ${{ inputs.org-name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact-ref }}
+          path: |
+            ${{ steps.artifact.outputs.artifact }}
+            ${{ steps.artifact.outputs.artifact }}.sha256
+          if-no-files-found: error
+      - name: Get tag name for release file name
+        if: contains(github.ref, 'refs/tags/v')
+        id: get_version
+        run: |
+          VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)"
+          echo "version_tag=$VERSION" >>$GITHUB_OUTPUT
+          echo "release_artifact=${{ inputs.project-name }}-$VERSION.${{ matrix.arch }}.flatpak" >>$GITHUB_OUTPUT
+      - name: Rename artifact for release upload
+        if: contains(github.ref, 'refs/tags/v')
+        run: |
+          cp "${{ steps.artifact.outputs.artifact }}"        "${{ steps.get_version.outputs.release_artifact }}"
+          cp "${{ steps.artifact.outputs.artifact }}.sha256" "${{ steps.get_version.outputs.release_artifact }}.sha256"
+      - name: Upload to versioned release
+        if: contains(github.ref, 'refs/tags/v')
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          draft: true
+          artifacts: "${{ steps.get_version.outputs.release_artifact }},${{ steps.get_version.outputs.release_artifact }}.sha256"
+      - name: Rename flatpak for nightly upload
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        run: |
+          cp "${{ steps.artifact.outputs.artifact }}"        "${{ inputs.project-name }}-nightly.flatpak"
+          cp "${{ steps.artifact.outputs.artifact }}.sha256" "${{ inputs.project-name }}-nightly.flatpak.sha256"
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: "${{ inputs.project-name }}-nightly.flatpak,${{ inputs.project-name }}-nightly.flatpak.sha256"
+
+  test:
+    name: Test
+    needs: [build]
+    strategy:
+      matrix:
+        arch: [x86_64]
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch tags if we're not already in a tag build.
+          fetch-tags: ${{ !contains(github.ref, 'refs/tags/v') }}
+          sparse-checkout: ${{ inputs.test-files }}
+      - name: Determine artifact file name
+        id: artifact
+        run: |
+          ARTIFACT="${{ inputs.project-name }}.flatpak"
+          echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
+          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-flatpak-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "binary-name=$(echo ${{ inputs.project-name }} | tr '[:upper:]' '[:lower:]')" >>$GITHUB_OUTPUT
+      - name: Download artifact from build step
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ steps.artifact.outputs.artifact-ref }}
+      - name: Install flatpak runner
+        run: sudo apt-get install -y flatpak
+      - name: Install KDE runtime
+        run: |
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.kde.Platform/${{ matrix.arch }}/6.8
+      - name: Install flatpak
+        run: flatpak install --user -y --bundle ${{ steps.artifact.outputs.artifact }}
+      - name: Run flatpak
+        run: ${{ inputs.smoke-test }} flatpak run ${{ inputs.org-name }}.${{ inputs.project-name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          QT_QPA_PLATFORM: offscreen
