@@ -40,7 +40,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: TokTok/ci-tools
-          path: ci-tools
+          path: third_party/ci-tools
           submodules: true
       - name: Link ci-tools
         if: github.repository == 'TokTok/ci-tools'
