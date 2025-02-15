@@ -3,7 +3,7 @@ on:
     inputs:
       project-name:
         description: 'Name of the application to build (e.g. qTox)'
-        required: true
+        required: false
         type: string
       org-name:
         description: 'Reverse domain name of the organization to build (e.g. chat.tox)'
@@ -51,10 +51,15 @@ jobs:
       - name: Determine artifact file name
         id: artifact
         run: |
-          ARTIFACT="${{ inputs.project-name }}.flatpak"
+          PROJECT_NAME="${{ inputs.project-name }}"
+          if [ -z "$PROJECT_NAME" ]; then
+            PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
+          fi
+          ARTIFACT="$PROJECT_NAME.flatpak"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
-          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-flatpak-${{ matrix.arch }}" >>$GITHUB_OUTPUT
-          echo "binary-name=$(echo ${{ inputs.project-name }} | tr '[:upper:]' '[:lower:]')" >>$GITHUB_OUTPUT
+          echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-flatpak-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "binary-name=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')" >>$GITHUB_OUTPUT
+          echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
       - name: Cache flatpak-builder cache (except ccache)
         uses: actions/cache@v4
         with:
@@ -75,7 +80,7 @@ jobs:
           --rm
           flatpak
           platform/flatpak/build.sh
-          ${{ inputs.project-name }}
+          ${{ steps.artifact.outputs.project-name }}
           ${{ inputs.org-name }}
 
       - name: Upload artifact
@@ -92,7 +97,7 @@ jobs:
         run: |
           VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)"
           echo "version_tag=$VERSION" >>$GITHUB_OUTPUT
-          echo "release_artifact=${{ inputs.project-name }}-$VERSION.${{ matrix.arch }}.flatpak" >>$GITHUB_OUTPUT
+          echo "release_artifact=${{ steps.artifact.outputs.project-name }}-$VERSION.${{ matrix.arch }}.flatpak" >>$GITHUB_OUTPUT
       - name: Rename artifact for release upload
         if: contains(github.ref, 'refs/tags/v')
         run: |
@@ -108,8 +113,8 @@ jobs:
       - name: Rename flatpak for nightly upload
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
-          cp "${{ steps.artifact.outputs.artifact }}"        "${{ inputs.project-name }}-nightly.flatpak"
-          cp "${{ steps.artifact.outputs.artifact }}.sha256" "${{ inputs.project-name }}-nightly.flatpak.sha256"
+          cp "${{ steps.artifact.outputs.artifact }}"        "${{ steps.artifact.outputs.project-name }}-nightly.flatpak"
+          cp "${{ steps.artifact.outputs.artifact }}.sha256" "${{ steps.artifact.outputs.project-name }}-nightly.flatpak.sha256"
       - name: Upload to nightly release
         uses: ncipollo/release-action@v1
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -120,7 +125,7 @@ jobs:
           omitNameDuringUpdate: true
           prerelease: true
           replacesArtifacts: true
-          artifacts: "${{ inputs.project-name }}-nightly.flatpak,${{ inputs.project-name }}-nightly.flatpak.sha256"
+          artifacts: "${{ steps.artifact.outputs.project-name }}-nightly.flatpak,${{ steps.artifact.outputs.project-name }}-nightly.flatpak.sha256"
 
   test:
     name: Test
@@ -130,6 +135,8 @@ jobs:
         arch: [x86_64]
     runs-on: ubuntu-22.04
     steps:
+      - name: Install prerequisites
+        run: sudo apt-get install -y --no-install-recommends pcregrep
       - uses: actions/checkout@v4
         with:
           # Fetch tags if we're not already in a tag build.
@@ -138,10 +145,15 @@ jobs:
       - name: Determine artifact file name
         id: artifact
         run: |
-          ARTIFACT="${{ inputs.project-name }}.flatpak"
+          PROJECT_NAME="${{ inputs.project-name }}"
+          if [ -z "$PROJECT_NAME" ]; then
+            PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
+          fi
+          ARTIFACT="$PROJECT_NAME.flatpak"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
-          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-flatpak-${{ matrix.arch }}" >>$GITHUB_OUTPUT
-          echo "binary-name=$(echo ${{ inputs.project-name }} | tr '[:upper:]' '[:lower:]')" >>$GITHUB_OUTPUT
+          echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-flatpak-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "binary-name=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')" >>$GITHUB_OUTPUT
+          echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
       - name: Download artifact from build step
         uses: actions/download-artifact@v4
         with:
@@ -155,7 +167,7 @@ jobs:
       - name: Install flatpak
         run: flatpak install --user -y --bundle ${{ steps.artifact.outputs.artifact }}
       - name: Run flatpak
-        run: ${{ inputs.smoke-test }} flatpak run ${{ inputs.org-name }}.${{ inputs.project-name }}
+        run: ${{ inputs.smoke-test }} flatpak run ${{ inputs.org-name }}.${{ steps.artifact.outputs.project-name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           QT_QPA_PLATFORM: offscreen

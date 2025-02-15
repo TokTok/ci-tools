@@ -3,7 +3,7 @@ on:
     inputs:
       project-name:
         description: 'Name of the application to build (e.g. qTox)'
-        required: true
+        required: false
         type: string
       cmake-args:
         description: 'Arguments to pass to CMake'
@@ -34,9 +34,15 @@ jobs:
           - build-type: ${{ (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') || contains(github.ref, 'refs/tags/v')) && 'Debug' }}
           - version: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '6.8.1' }}
     steps:
+      - name: Install prerequisites
+        run: sudo apt-get install -y --no-install-recommends pcregrep
       - name: Compute values for remaining steps
         id: computed
         run: |
+          PROJECT_NAME="${{ inputs.project-name }}"
+          if [ -z "$PROJECT_NAME" ]; then
+            PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
+          fi
           ARTIFACT_TYPE="$(echo '${{ matrix.build-type }}' | tr '[:upper:]' '[:lower:]')"
           echo "artifact_type=$ARTIFACT_TYPE" >>$GITHUB_OUTPUT
           if [ "${{ matrix.version }}" == "6.2.4" ]; then
@@ -47,12 +53,17 @@ jobs:
             echo "built_apk=_build/android-build/build/outputs/apk/$ARTIFACT_TYPE/android-build-$ARTIFACT_TYPE-signed.apk" >>$GITHUB_OUTPUT
           fi
           echo "suffix=$SUFFIX" >>$GITHUB_OUTPUT
-          echo "nightly_apk=${{ inputs.project-name }}-nightly-${{ matrix.arch }}-$ARTIFACT_TYPE$SUFFIX.apk" >>$GITHUB_OUTPUT
+          echo "nightly_apk=$PROJECT_NAME-nightly-${{ matrix.arch }}-$ARTIFACT_TYPE$SUFFIX.apk" >>$GITHUB_OUTPUT
           echo "docker_image=android_builder.${{ matrix.arch }}.${ARTIFACT_TYPE}_${{ matrix.version }}" >>$GITHUB_OUTPUT
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
+      - name: Checkout ci-tools
+        uses: actions/checkout@v4
+        with:
+          repository: TokTok/ci-tools
+          path: ci-tools
       - name: Fetch build scripts
         run: |
           git clone --depth=1 https://github.com/TokTok/dockerfiles "third_party/dockerfiles"
@@ -62,7 +73,7 @@ jobs:
         run: |
           ARTIFACT="${{ steps.computed.outputs.built_apk }}"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
-          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-android-${{ matrix.arch }}-${{ matrix.build-type }}-${{ matrix.version }}" >>$GITHUB_OUTPUT
+          echo "artifact-ref=${{ steps.computed.outputs.project-name }}-${{ github.sha }}-android-${{ matrix.arch }}-${{ matrix.build-type }}-${{ matrix.version }}" >>$GITHUB_OUTPUT
       - name: Cache compiler output
         uses: actions/cache@v4
         with:
@@ -79,25 +90,28 @@ jobs:
           --build-type ${{ matrix.build-type }}
           --
           ${{ inputs.cmake-args }}
+      - name: Generate sha256 checksum
+        id: sha256
+        run: ci-tools/tools/artifact_sha256.py
+          "${{ steps.computed.outputs.project-name }}"
+          ${{ steps.computed.outputs.built_apk }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.artifact.outputs.artifact-ref }}
-          path: |
-            ${{ steps.artifact.outputs.artifact }}
-            ${{ steps.artifact.outputs.artifact }}.sha256
+          path: ${{ steps.sha256.outputs.artifacts }}
           if-no-files-found: error
       - name: Get tag name for Android release file name
         if: contains(github.ref, 'refs/tags/v')
         id: get_version
         run: |
           VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)"
-          echo "release_apk=${{ inputs.project-name }}-$VERSION-${{ matrix.arch }}-${{ steps.computed.outputs.artifact_type }}${{ steps.computed.outputs.suffix }}.apk" >>$GITHUB_OUTPUT
+          echo "release_apk=${{ steps.computed.outputs.project-name }}-$VERSION-${{ matrix.arch }}-${{ steps.computed.outputs.artifact_type }}${{ steps.computed.outputs.suffix }}.apk" >>$GITHUB_OUTPUT
       - name: Rename Android APK for release upload
         if: contains(github.ref, 'refs/tags/v')
         run: |
-          cp "${{ steps.computed.outputs.built_apk }}" "${{ steps.get_version.outputs.release_apk }}"
-          sha256sum "${{ steps.get_version.outputs.release_apk }}" > "${{ steps.get_version.outputs.release_apk }}.sha256"
+          cp "${{ steps.computed.outputs.built_apk }}"        "${{ steps.get_version.outputs.release_apk }}"
+          cp "${{ steps.computed.outputs.built_apk }}.sha256" "${{ steps.get_version.outputs.release_apk }}.sha256"
       - name: Upload to versioned release
         if: inputs.production && contains(github.ref, 'refs/tags/v')
         uses: ncipollo/release-action@v1
@@ -107,10 +121,9 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: "${{ steps.get_version.outputs.release_apk }},${{ steps.get_version.outputs.release_apk }}.sha256"
       - name: Rename Android APK for nightly upload
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
-          cp "${{ steps.computed.outputs.built_apk }}" "${{ steps.computed.outputs.nightly_apk }}"
-          sha256sum "${{ steps.computed.outputs.nightly_apk }}" > "${{ steps.computed.outputs.nightly_apk }}.sha256"
+          cp "${{ steps.computed.outputs.built_apk }}"        "${{ steps.computed.outputs.nightly_apk }}"
+          cp "${{ steps.computed.outputs.built_apk }}.sha256" "${{ steps.computed.outputs.nightly_apk }}.sha256"
       - name: Upload to nightly release
         uses: ncipollo/release-action@v1
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'

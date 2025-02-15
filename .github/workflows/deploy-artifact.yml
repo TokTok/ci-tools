@@ -3,7 +3,7 @@ on:
     inputs:
       project-name:
         description: 'Name of the application to build (e.g. qTox)'
-        required: true
+        required: false
         type: string
       artifact-source:
         description: 'Artifact produced by the command (e.g. qTox.AppImage)'
@@ -27,6 +27,8 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     steps:
+      - name: Install prerequisites
+        run: sudo apt-get install -y --no-install-recommends pcregrep
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -34,20 +36,23 @@ jobs:
       - name: Checkout ci-tools
         uses: actions/checkout@v4
         with:
-          repository: TokTok/ci-tools
+          repository: iphydf/ci-tools
+          ref: infer-project-name
           path: ci-tools
           submodules: true
 
       - name: Run build
         run: ${{ inputs.run }}
+
       - name: Generate sha256 checksum
         id: sha256
-        run: ci-tools/tools/artifact_sha256.py ${{ inputs.artifact-source }}
-
+        run: ci-tools/tools/artifact_sha256.py
+          "${{ inputs.project-name }}"
+          ${{ inputs.artifact-source }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.project-name }}-${{ github.sha }}-${{ inputs.build }}
+          name: ${{ steps.sha256.outputs.project-name }}-${{ github.sha }}-${{ inputs.build }}
           path: ${{ steps.sha256.outputs.artifacts }}
           if-no-files-found: error
       - name: Rename artifact for release upload

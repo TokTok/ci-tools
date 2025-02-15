@@ -3,7 +3,7 @@ on:
     inputs:
       project-name:
         description: 'Name of the application to build (e.g. qTox)'
-        required: true
+        required: false
         type: string
       cmake-args:
         description: 'Arguments to pass to CMake'
@@ -37,6 +37,8 @@ jobs:
         arch: [x86_64]
     runs-on: ubuntu-24.04
     steps:
+      - name: Install prerequisites
+        run: sudo apt-get install -y --no-install-recommends pcregrep
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -48,9 +50,15 @@ jobs:
       - name: Determine artifact file name
         id: artifact
         run: |
-          ARTIFACT="${{ inputs.project-name }}-$(git rev-parse --short HEAD | head -c7)-${{ matrix.arch }}.AppImage"
+          sudo apt-get install -y --no-install-recommends pcregrep
+          PROJECT_NAME="${{ inputs.project-name }}"
+          if [ -z "$PROJECT_NAME" ]; then
+            PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
+          fi
+          ARTIFACT="$PROJECT_NAME-$(git rev-parse --short HEAD | head -c7)-${{ matrix.arch }}.AppImage"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
-          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-appimage-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-appimage-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
       - name: Cache compiler output
         uses: actions/cache@v4
         with:
@@ -67,7 +75,7 @@ jobs:
           platform/appimage/build.sh
           --arch ${{ matrix.arch }}
           --src-dir /qtox
-          --project-name ${{ inputs.project-name }}
+          --project-name ${{ steps.artifact.outputs.project-name }}
           --
           ${{ inputs.cmake-args }}
 
@@ -85,7 +93,7 @@ jobs:
         id: get_version
         run: |
           VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)"
-          echo "release_artifact=${{ inputs.project-name }}-$VERSION-${{ matrix.arch }}.AppImage" >>$GITHUB_OUTPUT
+          echo "release_artifact=${{ steps.artifact.outputs.project-name }}-$VERSION-${{ matrix.arch }}.AppImage" >>$GITHUB_OUTPUT
       - name: Rename artifact for release upload
         if: contains(github.ref, 'refs/tags/v')
         run: |
@@ -102,9 +110,9 @@ jobs:
       - name: Rename artifact for nightly upload
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
-          cp "${{ steps.artifact.outputs.artifact }}"        "${{ inputs.project-name }}-nightly-${{ matrix.arch }}.AppImage"
-          cp "${{ steps.artifact.outputs.artifact }}.sha256" "${{ inputs.project-name }}-nightly-${{ matrix.arch }}.AppImage.sha256"
-          cp "${{ steps.artifact.outputs.artifact }}.zsync"  "${{ inputs.project-name }}-nightly-${{ matrix.arch }}.AppImage.zsync"
+          cp "${{ steps.artifact.outputs.artifact }}"        "${{ steps.artifact.outputs.project-name }}-nightly-${{ matrix.arch }}.AppImage"
+          cp "${{ steps.artifact.outputs.artifact }}.sha256" "${{ steps.artifact.outputs.project-name }}-nightly-${{ matrix.arch }}.AppImage.sha256"
+          cp "${{ steps.artifact.outputs.artifact }}.zsync"  "${{ steps.artifact.outputs.project-name }}-nightly-${{ matrix.arch }}.AppImage.zsync"
       - name: Upload to nightly release
         uses: ncipollo/release-action@v1
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -115,7 +123,7 @@ jobs:
           omitNameDuringUpdate: true
           prerelease: true
           replacesArtifacts: true
-          artifacts: "${{ inputs.project-name }}-nightly-${{ matrix.arch }}.AppImage,${{ inputs.project-name }}-nightly-${{ matrix.arch }}.AppImage.sha256,${{ inputs.project-name }}-nightly-${{ matrix.arch }}.AppImage.zsync"
+          artifacts: "${{ steps.artifact.outputs.project-name }}-nightly-${{ matrix.arch }}.AppImage,${{ steps.artifact.outputs.project-name }}-nightly-${{ matrix.arch }}.AppImage.sha256,${{ steps.artifact.outputs.project-name }}-nightly-${{ matrix.arch }}.AppImage.zsync"
 
   test:
     name: Test on Ubuntu
@@ -134,9 +142,13 @@ jobs:
       - name: Determine artifact file name
         id: artifact
         run: |
-          ARTIFACT="${{ inputs.project-name }}-$(git rev-parse --short HEAD | head -c7)-${{ matrix.arch }}.AppImage"
+          PROJECT_NAME="${{ inputs.project-name }}"
+          if [ -z "$PROJECT_NAME" ]; then
+            PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
+          fi
+          ARTIFACT="$PROJECT_NAME-$(git rev-parse --short HEAD | head -c7)-${{ matrix.arch }}.AppImage"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
-          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-appimage-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-appimage-${{ matrix.arch }}" >>$GITHUB_OUTPUT
       - name: Download artifact from build step
         uses: actions/download-artifact@v4
         with:
@@ -149,7 +161,7 @@ jobs:
           echo "screenshot=$QTOX_SCREENSHOT" >>$GITHUB_OUTPUT
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          QTOX_SCREENSHOT: ${{ inputs.screenshot && format('{0}-AppImage-{1}.png', inputs.project-name, matrix.arch) }}
+          QTOX_SCREENSHOT: ${{ inputs.screenshot && format('{0}-AppImage-{1}.png', steps.artifact.outputs.project-name, matrix.arch) }}
       - name: Upload screenshot artifact
         if: inputs.screenshot
         uses: actions/upload-artifact@v4

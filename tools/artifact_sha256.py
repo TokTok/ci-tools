@@ -8,10 +8,11 @@ import sys
 
 def main():
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <files...>")
+        print(f"Usage: {sys.argv[0]} <project-name> <files...>")
         sys.exit(1)
 
-    files = sys.argv[1:]
+    project_name = sys.argv[1]
+    files = sys.argv[2:]
 
     outputs: list[str] = []
     for file in files:
@@ -27,6 +28,18 @@ def main():
             for output in outputs:
                 f.write(f"{output}\n")
             f.write("EOF\n")
+
+            if not project_name:
+                project_name = (
+                    subprocess.check_output(  # nosec
+                        [
+                            "pcregrep",
+                            "-M",
+                            "-o1",
+                            r"project\(\s*(\S+)",
+                            "CMakeLists.txt",
+                        ]).decode().strip())
+            f.write(f"project-name={project_name}\n")
 
 
 if __name__ == "__main__":

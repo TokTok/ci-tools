@@ -3,7 +3,7 @@ on:
     inputs:
       project-name:
         description: 'Name of the application to build (e.g. qTox).'
-        required: true
+        required: false
         type: string
       cmake-args:
         description: 'Arguments to pass to CMake.'
@@ -57,11 +57,16 @@ jobs:
       - name: Determine artifact file name
         id: artifact
         run: |
-          BINARY_NAME="$(echo ${{ inputs.project-name }} | tr '[:upper:]' '[:lower:]')"
+          PROJECT_NAME="${{ inputs.project-name }}"
+          if [ -z "$PROJECT_NAME" ]; then
+            PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
+          fi
+          BINARY_NAME="$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')"
           ARTIFACT="setup-$BINARY_NAME.exe"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
-          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
           echo "binary-name=$BINARY_NAME" >>$GITHUB_OUTPUT
+          echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
       - name: Cache compiler output
         uses: actions/cache@v4
         with:
@@ -74,7 +79,7 @@ jobs:
           --rm
           windows_builder.${{ matrix.arch }}
           platform/windows/cross-compile/build.sh
-          --project-name ${{ inputs.project-name }}
+          --project-name ${{ steps.artifact.outputs.project-name }}
           --arch ${{ matrix.arch }}
           --build-type ${{ matrix.build-type }}
           --run-tests
@@ -91,7 +96,7 @@ jobs:
       - name: Upload zip
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ inputs.project-name }}-${{ github.sha }}-windows-zip-${{ matrix.build-type }}-${{ matrix.arch }}
+          name: ${{ steps.artifact.outputs.project-name }}-${{ github.sha }}-windows-zip-${{ matrix.build-type }}-${{ matrix.arch }}
           path: install-prefix/${{ steps.artifact.outputs.binary-name }}-${{ matrix.arch }}-${{ matrix.build-type }}.zip
           if-no-files-found: error
       - name: Rename exe for release upload
@@ -150,6 +155,8 @@ jobs:
         exclude:
           - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'i686' }}
     steps:
+      - name: Install prerequisites
+        run: sudo apt-get install -y --no-install-recommends pcregrep
       - uses: actions/checkout@v4
         with:
           # Fetch tags if we're not already in a tag build.
@@ -159,10 +166,14 @@ jobs:
         id: artifact
         shell: bash
         run: |
-          BINARY_NAME="$(echo ${{ inputs.project-name }} | tr '[:upper:]' '[:lower:]')"
+          PROJECT_NAME="${{ inputs.project-name }}"
+          if [ -z "$PROJECT_NAME" ]; then
+            PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
+          fi
+          BINARY_NAME="$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')"
           ARTIFACT="setup-$BINARY_NAME.exe"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
-          echo "artifact-ref=${{ inputs.project-name }}-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
           echo "binary-name=$BINARY_NAME" >>$GITHUB_OUTPUT
       - name: Download artifact from build step
         uses: actions/download-artifact@v4
