@@ -163,7 +163,7 @@ jobs:
           echo "version_tag=$VERSION" >>$GITHUB_OUTPUT
           echo "release_artifact=${{ steps.artifact.outputs.project-name }}-$VERSION.${{ matrix.arch }}-${{ matrix.macos }}.dmg" >>$GITHUB_OUTPUT
       - name: Rename artifact for release upload
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: contains(github.ref, 'refs/tags/v')
         run: |
           cp "${{ steps.artifact.outputs.artifact }}"        "${{ steps.get_version.outputs.release_artifact }}"
           cp "${{ steps.artifact.outputs.artifact }}.sha256" "${{ steps.get_version.outputs.release_artifact }}.sha256"
