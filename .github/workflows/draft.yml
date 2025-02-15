@@ -10,3 +10,11 @@ on:
 jobs:
   release:
     uses: ./.github/workflows/release-drafter.yml
+
+  netlify:
+    uses: ./.github/workflows/netlify.yml
+    with:
+      dockerfile: platform/wasm/wasm.Dockerfile
+      path: /qtox
+    secrets:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
