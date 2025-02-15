@@ -1,0 +1,17 @@
+name: release
+
+on:
+  issues:
+    types: [assigned]
+
+# Cancel old builds when pushing new commits.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    name: Release
+    uses: TokTok/ci-tools/.github/workflows/release-deploy.yml@master
+    with:
+      production: true
