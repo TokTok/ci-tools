@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright © 2017-2019 by The qTox Project Contributors
+# Copyright © 2024-2025 The TokTok team
+
+set -euo pipefail
+
+PROJECT_NAME="$1"
+PROJECT_SRC_DIR="$2"
+BUNDLE_PATH="$(realpath "$3")"
+
+BUILD_DIR="$(realpath "$BUNDLE_PATH/..")"
+
+APP_VER=$(defaults read "$BUNDLE_PATH/Contents/Info.plist" CFBundleVersion)
+BINARY_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
+
+if [ ! -d "$BUNDLE_PATH" ]; then
+  echo "Please pass path to $BINARY_NAME.app as an argument!"
+  exit 1
+fi
+
+rm -f "$BUILD_DIR/$PROJECT_NAME.dmg"
+
+if security find-identity | grep -q Development; then
+  codesign -s "Development" "$BUNDLE_PATH"
+  codesign -v "$BUNDLE_PATH"
+else
+  echo "No Development identity found, skipping code signing"
+fi
+
+createdmg() {
+  create-dmg \
+    --filesystem APFS \
+    --no-internet-enable \
+    --volname "$PROJECT_NAME $APP_VER" \
+    --volicon "$PROJECT_SRC_DIR/resources/images/icons/$BINARY_NAME.icns" \
+    --background "$PROJECT_SRC_DIR/platform/macos/backgroundImage.tiff" \
+    --eula "$PROJECT_SRC_DIR/platform/macos/gplv3.rtf" \
+    --window-pos 200 120 \
+    --window-size 640 480 \
+    --icon-size 128 \
+    --hide-extension "$BINARY_NAME.app" \
+    --icon "$BINARY_NAME.app" 0 300 \
+    --app-drop-link 400 300 \
+    "$BUILD_DIR/$PROJECT_NAME.dmg" \
+    "$BUNDLE_PATH"
+}
+
+# Retry 3 times in case of hditool "device busy" errors.
+createdmg || createdmg || createdmg

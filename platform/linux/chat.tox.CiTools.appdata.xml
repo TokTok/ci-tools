@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop">
+ <id>chat.tox.CiTools</id>
+ <launchable type="desktop-id">chat.tox.CiTools.desktop</launchable>
+ <metadata_license>CC-BY-SA-3.0</metadata_license>
+ <project_license>GPL-3.0</project_license>
+ <name>CiTools</name>
+ <summary>Tox Continuous Integration and Delivery tools.</summary>
+ <description>
+  <p>
+    TODO(iphydf): Write a description.
+  </p>
+ </description>
+ <screenshots>
+  <screenshot type="default">
+   <image>https://i.imgur.com/olb89CN.png</image>
+   <caption>A sample conversation taking place on qTox</caption>
+  </screenshot>
+ </screenshots>
+ <developer id="ltd.toktok">
+  <name>TokTok Project</name>
+ </developer>
+ <url type="homepage">https://toktok.github.io/ci-tools</url>
+ <update_contact>iphydf@gmail.com</update_contact>
+ <project_group>CiTools</project_group>
+   <content_rating type="oars-1.0">
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-audio">intense</content_attribute>
+  </content_rating>
+ <releases>
+  <release version="0.0.1" date="2025-02-11"/>
+ </releases>
+</component>

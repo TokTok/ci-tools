@@ -41,7 +41,7 @@ def _glob_to_regex(original: str, renamed: str) -> tuple[str, str]:
     return original, renamed
 
 
-def _write_github_outputs(outputs: list[str]):
+def _write_github_outputs(outputs: list[str]) -> None:
     if "GITHUB_ACTIONS" in os.environ:
         with open(os.environ["GITHUB_OUTPUT"], "a") as f:
             f.write("artifacts<<EOF\n")
@@ -50,7 +50,7 @@ def _write_github_outputs(outputs: list[str]):
             f.write("EOF\n")
 
 
-def main():
+def main() -> None:
     if len(sys.argv) < 4:
         print(f"Usage: {sys.argv[0]} <original> <renamed> [files...]")
         sys.exit(1)

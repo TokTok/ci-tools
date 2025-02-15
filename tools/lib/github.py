@@ -672,7 +672,7 @@ def push_signed(
             },
         )
     update_response.raise_for_status()
-    return commit_response.json()["sha"]
+    return str(commit_response.json()["sha"])
 
 
 def tag(
@@ -714,7 +714,7 @@ def tag(
         },
     )
     tag_ref_response.raise_for_status()
-    return tag_response.json()["sha"]
+    return str(tag_response.json()["sha"])
 
 
 def set_release_notes(tag: str, notes: str, prerelease: bool) -> None:

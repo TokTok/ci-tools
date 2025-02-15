@@ -1,3 +1,5 @@
+name: deploy-android
+
 on:
   workflow_call:
     inputs:
@@ -36,94 +38,96 @@ jobs:
     steps:
       - name: Install prerequisites
         run: sudo apt-get install -y --no-install-recommends pcregrep
-      - name: Compute values for remaining steps
-        id: computed
-        run: |
-          PROJECT_NAME="${{ inputs.project-name }}"
-          if [ -z "$PROJECT_NAME" ]; then
-            PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
-          fi
-          ARTIFACT_TYPE="$(echo '${{ matrix.build-type }}' | tr '[:upper:]' '[:lower:]')"
-          echo "artifact_type=$ARTIFACT_TYPE" >>$GITHUB_OUTPUT
-          if [ "${{ matrix.version }}" == "6.2.4" ]; then
-            SUFFIX="-android7"
-            echo "built_apk=_build/android-build/build/outputs/apk/debug/android-build-debug.apk" >>$GITHUB_OUTPUT
-          else
-            SUFFIX=""
-            echo "built_apk=_build/android-build/build/outputs/apk/$ARTIFACT_TYPE/android-build-$ARTIFACT_TYPE-signed.apk" >>$GITHUB_OUTPUT
-          fi
-          echo "suffix=$SUFFIX" >>$GITHUB_OUTPUT
-          echo "nightly_apk=$PROJECT_NAME-nightly-${{ matrix.arch }}-$ARTIFACT_TYPE$SUFFIX.apk" >>$GITHUB_OUTPUT
-          echo "docker_image=android_builder.${{ matrix.arch }}.${ARTIFACT_TYPE}_${{ matrix.version }}" >>$GITHUB_OUTPUT
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
       - name: Checkout ci-tools
+        if: github.repository != 'TokTok/ci-tools'
         uses: actions/checkout@v4
         with:
           repository: TokTok/ci-tools
-          path: ci-tools
-      - name: Fetch build scripts
-        run: |
-          git clone --depth=1 https://github.com/TokTok/dockerfiles "third_party/dockerfiles"
-          cp third_party/dockerfiles/docker-compose.yml .
+          path: third_party/ci-tools
+          submodules: true
+      - name: Link ci-tools
+        if: github.repository == 'TokTok/ci-tools'
+        run: ln -s .. third_party/ci-tools
+      - name: Checkout dockerfiles
+        uses: actions/checkout@v4
+        with:
+          repository: TokTok/dockerfiles
+          path: third_party/dockerfiles
+          submodules: true
+      - name: Copy docker-compose.yml
+        run: cp third_party/dockerfiles/docker-compose.yml .
+
       - name: Determine artifact file name
         id: artifact
         run: |
-          ARTIFACT="${{ steps.computed.outputs.built_apk }}"
-          echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
-          echo "artifact-ref=${{ steps.computed.outputs.project-name }}-${{ github.sha }}-android-${{ matrix.arch }}-${{ matrix.build-type }}-${{ matrix.version }}" >>$GITHUB_OUTPUT
+          PROJECT_NAME="${{ inputs.project-name }}"
+          if [ -z "$PROJECT_NAME" ]; then
+            PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
+          fi
+          echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
+
+          ARTIFACT_TYPE="$(echo '${{ matrix.build-type }}' | tr '[:upper:]' '[:lower:]')"
+
+          ARTIFACT="$PROJECT_NAME.apk"
+          echo "artifact-source=$ARTIFACT" >>$GITHUB_OUTPUT
+          echo "artifact-versioned=$PROJECT_NAME-\$VERSION-${{ matrix.arch }}-$ARTIFACT_TYPE-${{ matrix.version }}" >>$GITHUB_OUTPUT
+
+          echo "docker_image=android_builder.${{ matrix.arch }}.${ARTIFACT_TYPE}_${{ matrix.version }}" >>$GITHUB_OUTPUT
       - name: Cache compiler output
         uses: actions/cache@v4
         with:
           path: .cache/ccache
           key: ${{ github.job }}-android-${{ matrix.arch }}-${{ matrix.build-type }}-${{ matrix.version }}-ccache
       - name: Download Docker image
-        run: docker compose run --rm ${{ steps.computed.outputs.docker_image }} uname -a
+        run: docker compose run --rm ${{ steps.artifact.outputs.docker_image }} uname -a
       - name: Run build
         run: docker compose run
           --rm
-          ${{ steps.computed.outputs.docker_image }}
-          platform/android/cross-compile/build.sh
+          ${{ steps.artifact.outputs.docker_image }}
+          third_party/ci-tools/platform/android/cross-compile/build.sh
+          --project-name ${{ steps.artifact.outputs.project-name }}
+          --qt-version ${{ matrix.version }}
           --arch ${{ matrix.arch }}
           --build-type ${{ matrix.build-type }}
           --
           ${{ inputs.cmake-args }}
       - name: Generate sha256 checksum
         id: sha256
-        run: ci-tools/tools/artifact_sha256.py
-          "${{ steps.computed.outputs.project-name }}"
-          ${{ steps.computed.outputs.built_apk }}
+        run: third_party/ci-tools/tools/artifact_sha256.py
+          "${{ steps.artifact.outputs.project-name }}"
+          ${{ steps.artifact.outputs.artifact-source }}
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.artifact.outputs.artifact-ref }}
+          name: ${{ steps.sha256.outputs.project-name }}-${{ github.sha }}-android-${{ matrix.arch }}-${{ matrix.build-type }}-${{ matrix.version }}
           path: ${{ steps.sha256.outputs.artifacts }}
           if-no-files-found: error
-      - name: Get tag name for Android release file name
+      - name: Rename artifact for release upload
+        id: release-version
         if: contains(github.ref, 'refs/tags/v')
-        id: get_version
-        run: |
-          VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)"
-          echo "release_apk=${{ steps.computed.outputs.project-name }}-$VERSION-${{ matrix.arch }}-${{ steps.computed.outputs.artifact_type }}${{ steps.computed.outputs.suffix }}.apk" >>$GITHUB_OUTPUT
-      - name: Rename Android APK for release upload
-        if: contains(github.ref, 'refs/tags/v')
-        run: |
-          cp "${{ steps.computed.outputs.built_apk }}"        "${{ steps.get_version.outputs.release_apk }}"
-          cp "${{ steps.computed.outputs.built_apk }}.sha256" "${{ steps.get_version.outputs.release_apk }}.sha256"
+        run: VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)";
+          third_party/ci-tools/tools/artifact_rename.py
+            "${{ steps.artifact.outputs.artifact-source }}"
+            "${{ steps.artifact.outputs.artifact-versioned }}"
+            ${{ steps.artifact.outputs.artifact-source }}
       - name: Upload to versioned release
         if: inputs.production && contains(github.ref, 'refs/tags/v')
         uses: ncipollo/release-action@v1
         with:
           allowUpdates: true
           draft: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "${{ steps.get_version.outputs.release_apk }},${{ steps.get_version.outputs.release_apk }}.sha256"
-      - name: Rename Android APK for nightly upload
-        run: |
-          cp "${{ steps.computed.outputs.built_apk }}"        "${{ steps.computed.outputs.nightly_apk }}"
-          cp "${{ steps.computed.outputs.built_apk }}.sha256" "${{ steps.computed.outputs.nightly_apk }}.sha256"
+          artifacts: ${{ steps.release-version.outputs.artifacts }}
+      - name: Rename artifact for nightly upload
+        id: nightly-version
+        run: VERSION="nightly";
+          third_party/ci-tools/tools/artifact_rename.py
+            "${{ steps.artifact.outputs.artifact-source }}"
+            "${{ steps.artifact.outputs.artifact-versioned }}"
+            ${{ steps.artifact.outputs.artifact-source }}
       - name: Upload to nightly release
         uses: ncipollo/release-action@v1
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
@@ -134,5 +138,4 @@ jobs:
           omitNameDuringUpdate: true
           prerelease: true
           replacesArtifacts: true
-          token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: "${{ steps.computed.outputs.nightly_apk }},${{ steps.computed.outputs.nightly_apk }}.sha256"
+          artifacts: ${{ steps.nightly-version.outputs.artifacts }}

@@ -1,3 +1,5 @@
+name: deploy-prepare
+
 on: [workflow_call]
 
 jobs:

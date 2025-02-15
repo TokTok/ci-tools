@@ -1,3 +1,5 @@
+name: deploy-windows
+
 on:
   workflow_call:
     inputs:
@@ -42,18 +44,33 @@ jobs:
       contents: write
     runs-on: ubuntu-24.04
     outputs:
-      artifact: ${{ steps.artifact.outputs.artifact }}
-      artifact-ref: ${{ steps.artifact.outputs.artifact-ref }}
-      binary-name: ${{ steps.artifact.outputs.binary-name }}
+      project-name: ${{ steps.artifact.outputs.project-name }}
     steps:
+      - name: Install prerequisites
+        run: sudo apt-get install -y --no-install-recommends pcregrep
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           submodules: true
-      - name: Fetch build scripts
-        run: |
-          git clone --depth=1 https://github.com/TokTok/dockerfiles third_party/dockerfiles
-          cp third_party/dockerfiles/docker-compose.yml .
+      - name: Checkout ci-tools
+        if: github.repository != 'TokTok/ci-tools'
+        uses: actions/checkout@v4
+        with:
+          repository: TokTok/ci-tools
+          path: third_party/ci-tools
+          submodules: true
+      - name: Link ci-tools
+        if: github.repository == 'TokTok/ci-tools'
+        run: ln -s .. third_party/ci-tools
+      - name: Checkout dockerfiles
+        uses: actions/checkout@v4
+        with:
+          repository: TokTok/dockerfiles
+          path: third_party/dockerfiles
+          submodules: true
+      - name: Copy docker-compose.yml
+        run: cp third_party/dockerfiles/docker-compose.yml .
+
       - name: Determine artifact file name
         id: artifact
         run: |
@@ -61,12 +78,13 @@ jobs:
           if [ -z "$PROJECT_NAME" ]; then
             PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
           fi
+          echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
+
           BINARY_NAME="$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')"
           ARTIFACT="setup-$BINARY_NAME.exe"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
           echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
           echo "binary-name=$BINARY_NAME" >>$GITHUB_OUTPUT
-          echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
       - name: Cache compiler output
         uses: actions/cache@v4
         with:
@@ -155,9 +173,8 @@ jobs:
         exclude:
           - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'i686' }}
     steps:
-      - name: Install prerequisites
-        run: sudo apt-get install -y --no-install-recommends pcregrep
       - uses: actions/checkout@v4
+        if: inputs.test-files
         with:
           # Fetch tags if we're not already in a tag build.
           fetch-tags: ${{ !contains(github.ref, 'refs/tags/v') }}
@@ -166,14 +183,10 @@ jobs:
         id: artifact
         shell: bash
         run: |
-          PROJECT_NAME="${{ inputs.project-name }}"
-          if [ -z "$PROJECT_NAME" ]; then
-            PROJECT_NAME="$(pcregrep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
-          fi
-          BINARY_NAME="$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')"
+          BINARY_NAME="$(echo "${{ needs.build.outputs.project-name }}" | tr '[:upper:]' '[:lower:]')"
           ARTIFACT="setup-$BINARY_NAME.exe"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
-          echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "artifact-ref=${{ needs.build.outputs.project-name }}-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
           echo "binary-name=$BINARY_NAME" >>$GITHUB_OUTPUT
       - name: Download artifact from build step
         uses: actions/download-artifact@v4
