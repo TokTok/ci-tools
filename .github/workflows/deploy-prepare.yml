@@ -13,3 +13,30 @@ jobs:
       - name: Move nightly tag to head for nightly release
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: git tag -f nightly && git push origin nightly -f
+
+  validate-pr:
+    name: Validate PR
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        if: github.event_name == 'pull_request'
+        with:
+          # Fetch all history so that we can check for changes in the entire history.
+          fetch-depth: 0
+      - name: Checkout ci-tools
+        if: github.event_name == 'pull_request' && github.repository != 'TokTok/ci-tools'
+        uses: actions/checkout@v4
+        with:
+          repository: TokTok/ci-tools
+          path: third_party/ci-tools
+          submodules: true
+      - name: Link ci-tools
+        if: github.event_name == 'pull_request' && github.repository == 'TokTok/ci-tools'
+        run: ln -s .. third_party/ci-tools
+      - name: Validate PR
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          third_party/ci-tools/tools/use_github_actions_identity.sh
+          third_party/ci-tools/tools/validate_pr.py

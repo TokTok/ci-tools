@@ -32,6 +32,8 @@ jobs:
           path: ci-tools
       - name: Create GitHub actions identity
         run: ci-tools/tools/use_github_actions_identity.sh
+      - name: Set up git upstream remote
+        run: ci-tools/tools/add_upstream_remote.sh
       - name: Import developer keys
         run: ci-tools/tools/import_developer_keys.sh
       - name: Create release

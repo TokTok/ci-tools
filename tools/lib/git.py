@@ -11,7 +11,7 @@ from typing import Optional
 
 from lib import types
 
-VERSION_REGEX = re.compile(r"v\d+\.\d+\.\d+(?:-rc\.\d+)?")
+VERSION_REGEX = re.compile(r"v\d+\.\d+(?:\.\d+)?(?:-rc\.\d+)?")
 RELEASE_BRANCH_PREFIX = "release"
 RELEASE_BRANCH_REGEX = re.compile(
     f"{RELEASE_BRANCH_PREFIX}/{VERSION_REGEX.pattern}")
@@ -45,13 +45,13 @@ class Version:
 
 
 def parse_version(version: str) -> Version:
-    match = re.match(r"v(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?", version)
+    match = re.match(r"v(\d+)\.(\d+)(?:\.(\d+))?(?:-rc\.(\d+))?", version)
     if not match:
         raise ValueError(f"Could not parse version: {version}")
     return Version(
         major=int(match.group(1)),
         minor=int(match.group(2)),
-        patch=int(match.group(3)),
+        patch=int(match.group(3)) if match.group(3) else 0,
         rc=int(match.group(4)) if match.group(4) else None,
     )
 
