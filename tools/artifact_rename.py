@@ -46,26 +46,38 @@ def main():
         print(f"Usage: {sys.argv[0]} <original> <renamed> [files...]")
         sys.exit(1)
 
-    original = sys.argv[1]
-    renamed = sys.argv[2]
+    original = sys.argv[1].split(" ")
+    renamed = sys.argv[2].split(" ")
     files = sys.argv[3:]
 
-    print(f"Copying {original} to {renamed}")
+    if len(original) != len(renamed):
+        print(f"Error: {len(original)} original and {len(renamed)} renamed")
+        sys.exit(1)
 
-    original_re, renamed_re = _glob_to_regex(original, renamed)
-
-    print(f"Copying {original_re} to {renamed_re}")
     print(f"Found {len(files)} files: {files}")
+
     outputs: list[str] = []
-    for f in files:
-        new_name = re.sub(original_re, renamed_re, f)
-        print(f"Copying {f} to {new_name}")
-        try:
-            with open(f, "rb") as src, open(new_name, "wb") as dst:
-                dst.write(src.read())
-            outputs.append(new_name)
-        except Exception as e:
-            print(f"Error Copying {f} to {new_name}: {e}")
+    for o, r in zip(original, renamed):
+        print(f"Copying glob {o} to {r}")
+
+        o_re, r_re = _glob_to_regex(o, r)
+
+        print(f"Copying regex {o_re} to {r_re}")
+        o_files = [f for f in files if re.match(o_re, f)]
+        if not o_files:
+            print(f"Error: no files match {o_re}")
+            sys.exit(1)
+        for f in o_files:
+            if not re.match(o_re, f):
+                continue
+            new_name = re.sub(o_re, r_re, f)
+            print(f"Copying file {f} to {new_name}")
+            try:
+                with open(f, "rb") as src, open(new_name, "wb") as dst:
+                    dst.write(src.read())
+                outputs.append(new_name)
+            except Exception as e:
+                print(f"Error Copying {f} to {new_name}: {e}")
 
     print(f"Renamed {len(outputs)} files: {outputs}")
     _write_github_outputs(outputs)

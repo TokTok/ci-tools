@@ -41,16 +41,7 @@ jobs:
         run: ${{ inputs.run }}
       - name: Generate sha256 checksum
         id: sha256
-        run: |
-          {
-            echo 'artifacts<<EOF'
-            for file in ${{ inputs.artifact-source }}; do
-              sha256sum "$file" >"$file.sha256"
-              echo "$file"
-              echo "$file.sha256"
-            done
-            echo 'EOF'
-          } >>"$GITHUB_OUTPUT"
+        run: ci-tools/tools/artifact_sha256.py ${{ inputs.artifact-source }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -62,7 +53,7 @@ jobs:
         id: release-version
         if: contains(github.ref, 'refs/tags/v')
         run: VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)";
-          ci-tools/tools/rename_artifact.py
+          ci-tools/tools/artifact_rename.py
             "${{ inputs.artifact-source }}"
             "${{ inputs.artifact-versioned }}"
             ${{ inputs.artifact-source }}
@@ -76,7 +67,7 @@ jobs:
       - name: Rename artifact for nightly upload
         id: nightly-version
         run: VERSION="nightly";
-          ci-tools/tools/rename_artifact.py
+          ci-tools/tools/artifact_rename.py
             "${{ inputs.artifact-source }}"
             "${{ inputs.artifact-versioned }}"
             ${{ inputs.artifact-source }}
