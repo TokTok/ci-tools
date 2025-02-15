@@ -29,6 +29,15 @@ def _glob_to_regex(original: str, renamed: str) -> tuple[str, str]:
             original = original.replace(choice, f"({matcher})", 1)
             renamed = renamed.replace(choice, f"\\{i}", 1)
             i += 1
+    # The remaining globs are in the original only and are turned into
+    # non-capturing groups so file name regexp matching works.
+    while _has_glob(original):
+        if "*" in original:
+            original = original.replace("*", ".+", 1)
+        if "{" in original and "}" in original:
+            choice = original[original.index("{"):original.index("}") + 1]
+            matcher = choice[1:-1].replace(",", "|")
+            original = original.replace(choice, f"(?:{matcher})", 1)
     return original, renamed
 
 
