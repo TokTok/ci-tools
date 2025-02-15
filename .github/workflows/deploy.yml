@@ -1,0 +1,77 @@
+name: deploy
+
+on:
+  # Allow manual trigger.
+  workflow_dispatch:
+  pull_request:
+    branches: ["master"]
+  push:
+    branches: ["master"]
+    tags: ["v*"]
+
+# Cancel old builds when pushing new commits.
+concurrency:
+  group: deploy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  #############################################################
+  # Preparation jobs
+  #############################################################
+
+  prepare:
+    name: Prepare
+    uses: ./.github/workflows/deploy-prepare.yml
+
+  #############################################################
+  # Build, test, and deploy jobs (PR and push)
+  #############################################################
+
+  android:
+    name: Android
+    uses: ./.github/workflows/deploy-android.yml
+    needs: [prepare]
+    with:
+      production: true
+
+  appimage:
+    name: AppImage
+    uses: ./.github/workflows/deploy-appimage.yml
+    needs: [prepare]
+    with:
+      smoke-test: test/smoke-test.sh
+      test-files: test/smoke-test.sh
+
+  flatpak:
+    name: Flatpak
+    uses: ./.github/workflows/deploy-flatpak.yml
+    needs: [prepare]
+    with:
+      smoke-test: test/smoke-test.sh
+      test-files: test/smoke-test.sh
+
+  macos:
+    name: macOS
+    uses: ./.github/workflows/deploy-macos.yml
+    needs: [prepare]
+    with:
+      smoke-test: test/smoke-test.sh
+      test-files: test/smoke-test.sh
+
+  windows:
+    name: Windows
+    uses: ./.github/workflows/deploy-windows.yml
+    needs: [prepare]
+    with:
+      smoke-test: test/smoke-test.sh
+      test-files: test/smoke-test.sh
+
+  readme:
+    name: Readme
+    uses: ./.github/workflows/deploy-artifact.yml
+    needs: [prepare]
+    with:
+      artifact-source: README.md
+      artifact-versioned: README-$VERSION.md
+      build: readme

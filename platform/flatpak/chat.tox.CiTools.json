@@ -1,0 +1,36 @@
+{
+  "app-id": "chat.tox.CiTools",
+  "runtime": "org.kde.Platform",
+  "sdk": "org.kde.Sdk",
+  "runtime-version": "6.8",
+  "command": "citools",
+  "rename-icon": "citools",
+  "finish-args": [
+    "--share=network",
+    "--socket=pulseaudio",
+    "--socket=wayland",
+    "--socket=fallback-x11",
+    "--share=ipc",
+    "--talk-name=org.kde.StatusNotifierWatcher",
+    "--filesystem=xdg-desktop",
+    "--filesystem=xdg-documents",
+    "--filesystem=xdg-download",
+    "--filesystem=xdg-music",
+    "--filesystem=xdg-pictures",
+    "--filesystem=xdg-videos",
+    "--filesystem=/media",
+    "--device=all"
+  ],
+  "modules": [
+    {
+      "name": "CiTools",
+      "buildsystem": "cmake-ninja",
+      "sources": [
+        {
+          "type": "dir",
+          "path": "/qtox/"
+        }
+      ]
+    }
+  ]
+}

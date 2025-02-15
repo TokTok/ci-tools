@@ -1,3 +1,5 @@
+name: deploy-macos
+
 on:
   workflow_call:
     inputs:
@@ -64,11 +66,23 @@ jobs:
         with:
           fetch-depth: 0
           submodules: true
-      - name: Fetch build scripts
-        run: |
-          git clone --depth=1 https://github.com/TokTok/ci-tools third_party/ci-tools
-          git clone --depth=1 https://github.com/TokTok/dockerfiles third_party/dockerfiles
-          cp third_party/dockerfiles/docker-compose.yml .
+      - name: Checkout ci-tools
+        if: github.repository != 'TokTok/ci-tools'
+        uses: actions/checkout@v4
+        with:
+          repository: TokTok/ci-tools
+          path: third_party/ci-tools
+          submodules: true
+      - name: Link ci-tools
+        if: github.repository == 'TokTok/ci-tools'
+        run: ln -s .. third_party/ci-tools
+      - name: Checkout dockerfiles
+        uses: actions/checkout@v4
+        with:
+          repository: TokTok/dockerfiles
+          path: third_party/dockerfiles
+          submodules: true
+
       - name: Determine artifact file name
         id: artifact
         run: |
@@ -76,10 +90,11 @@ jobs:
           if [ -z "$PROJECT_NAME" ]; then
             PROJECT_NAME="$(pcre2grep -M -o1 'project\(\s*(\S+)' CMakeLists.txt)"
           fi
+          echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
+
           ARTIFACT="$PROJECT_NAME-${{ matrix.arch }}-${{ matrix.macos }}.dmg"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
           echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-macos-${{ matrix.macos }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
-          echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
       - name: Download Qt
         if: inputs.need-qt
         run: third_party/dockerfiles/qtox/deps/download_qt.sh
@@ -112,7 +127,7 @@ jobs:
           BUILD_CERTIFICATE_BASE64: ${{ secrets.APPLE_BUILD_CERTIFICATE_BASE64 }}
           P12_PASSWORD: ${{ secrets.APPLE_P12_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.APPLE_KEYCHAIN_PASSWORD }}
-        run: third_party/ci-tools/scripts/install_apple_cert.sh >/dev/null
+        run: third_party/ci-tools/tools/install_apple_cert.sh >/dev/null
       - name: Cache compiler output
         uses: actions/cache@v4
         with:
@@ -191,6 +206,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        if: inputs.test-files
         with:
           # Fetch tags if we're not already in a tag build.
           fetch-tags: ${{ !contains(github.ref, 'refs/tags/v') }}

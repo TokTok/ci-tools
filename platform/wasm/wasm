@@ -1,0 +1,6 @@
+#!/bin/sh
+
+set -eux
+
+docker build -t toxchat/ci-tools:wasm -f platform/wasm/wasm.Dockerfile .
+docker run --rm -it -p 8000:8000 toxchat/ci-tools:wasm

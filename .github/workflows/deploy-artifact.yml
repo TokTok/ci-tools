@@ -1,3 +1,5 @@
+name: deploy-artifact
+
 on:
   workflow_call:
     inputs:
@@ -19,7 +21,7 @@ on:
         type: string
       run:
         description: 'Command to run to build the artifact'
-        required: true
+        required: false
         type: string
 
 jobs:
@@ -34,19 +36,23 @@ jobs:
           fetch-depth: 0
           submodules: true
       - name: Checkout ci-tools
+        if: github.repository != 'TokTok/ci-tools'
         uses: actions/checkout@v4
         with:
-          repository: iphydf/ci-tools
-          ref: infer-project-name
+          repository: TokTok/ci-tools
           path: ci-tools
           submodules: true
+      - name: Link ci-tools
+        if: github.repository == 'TokTok/ci-tools'
+        run: ln -s .. third_party/ci-tools
 
       - name: Run build
+        if: inputs.run
         run: ${{ inputs.run }}
 
       - name: Generate sha256 checksum
         id: sha256
-        run: ci-tools/tools/artifact_sha256.py
+        run: third_party/ci-tools/tools/artifact_sha256.py
           "${{ inputs.project-name }}"
           ${{ inputs.artifact-source }}
       - name: Upload artifact
@@ -59,7 +65,7 @@ jobs:
         id: release-version
         if: contains(github.ref, 'refs/tags/v')
         run: VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)";
-          ci-tools/tools/artifact_rename.py
+          third_party/ci-tools/tools/artifact_rename.py
             "${{ inputs.artifact-source }}"
             "${{ inputs.artifact-versioned }}"
             ${{ inputs.artifact-source }}
@@ -73,7 +79,7 @@ jobs:
       - name: Rename artifact for nightly upload
         id: nightly-version
         run: VERSION="nightly";
-          ci-tools/tools/artifact_rename.py
+          third_party/ci-tools/tools/artifact_rename.py
             "${{ inputs.artifact-source }}"
             "${{ inputs.artifact-versioned }}"
             ${{ inputs.artifact-source }}

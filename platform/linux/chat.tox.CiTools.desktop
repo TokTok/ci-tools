@@ -1,0 +1,11 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=CiTools
+GenericName=Tox debug client
+Comment=Continous integration and delivery tools for Tox
+TryExec=citools
+Exec=citools %u
+Icon=citools
+Categories=Network;
+Terminal=false

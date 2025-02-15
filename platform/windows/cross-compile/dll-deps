@@ -1,0 +1,13 @@
+# Common Qt dependencies.
+Qt6Core.dll
+Qt6Gui.dll
+Qt6Network.dll
+Qt6Widgets.dll
+libzstd.dll
+platforms/qdirect2d.dll
+platforms/qoffscreen.dll
+platforms/qwindows.dll
+platforms/qminimal.dll
+tls/qschannelbackend.dll
+tls/qopensslbackend.dll
+tls/qcertonlybackend.dll
