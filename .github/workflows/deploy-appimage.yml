@@ -169,6 +169,7 @@ jobs:
           ARTIFACT="$PROJECT_NAME-$(git rev-parse --short HEAD | head -c7)-${{ matrix.arch }}.AppImage"
           echo "artifact=$ARTIFACT" >>$GITHUB_OUTPUT
           echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-appimage-${{ matrix.arch }}" >>$GITHUB_OUTPUT
+          echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
       - name: Download artifact from build step
         uses: actions/download-artifact@v4
         with:
