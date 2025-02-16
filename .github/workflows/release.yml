@@ -11,6 +11,8 @@ concurrency:
 jobs:
   release:
     name: Release
-    uses: TokTok/ci-tools/.github/workflows/release-deploy.yml@master
+    uses: ./.github/workflows/release-deploy.yml
     with:
       production: true
+    secrets:
+      TOKEN_RELEASES: ${{ secrets.TOKEN_RELEASES }}
