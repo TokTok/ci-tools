@@ -88,7 +88,7 @@ def api(
 
 def clear_cache() -> None:
     """Clear the cache of API calls."""
-    api_requests.clear()
+    api.cache_clear()
 
 
 def username() -> Optional[str]:
