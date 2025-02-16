@@ -1,11 +1,21 @@
-<a name="v0.8.1-rc.1"></a>
+<a name="v0.8.1"></a>
 
-## v0.8.1-rc.1 (2025-02-16)
+## v0.8.1 (2025-02-16)
 
 ### Release notes
 
-First release of ci-tools made by ci-tools releaser scripts. Release candidate first.
+Prod release for ci-tools.
 
+#### Bug Fixes
+
+- Run release-soon on everything except push. ([8d52ffa9](https://github.com/TokTok/ci-tools/commit/8d52ffa94e12cc23075fde7d19ae86a10fa91c2b))
+- Don't run release-soon check on pushes, only pulls. ([138a61e8](https://github.com/TokTok/ci-tools/commit/138a61e8e66b874849a5e5d82c2607280376c664))
+- Output a zero-length file when changelog is empty. ([2337240f](https://github.com/TokTok/ci-tools/commit/2337240fb4840361a1c085b6c91476c3f9c27b43))
+- **Security:** Don't pass tokens to repo-local code. ([887ba6cf](https://github.com/TokTok/ci-tools/commit/887ba6cf826e0c43013d90e421047a85b17bd75a))
+
+<a name="v0.8.1-rc.1"></a>
+
+## v0.8.1-rc.1 (2025-02-16)
 #### Bug Fixes
 
 - Reviewable config was broken. ([73df8058](https://github.com/TokTok/ci-tools/commit/73df8058eaa6bb34a05411e50b27039447355dc5))
