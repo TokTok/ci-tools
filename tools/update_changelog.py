@@ -480,7 +480,8 @@ def main(config: Optional[Config] = None) -> None:
 
     if config.changelog:
         with open(config.changelog, "w") as f:
-            print(text, file=f)
+            if text.strip():
+                print(text, file=f)
     else:
         print(text)
 
