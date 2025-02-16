@@ -22,6 +22,7 @@ class Config:
     commit: bool
     debug: bool = False
     release: bool = False
+    git_tag: Optional[str] = None
 
 
 def parse_args() -> Config:
@@ -46,6 +47,11 @@ def parse_args() -> Config:
         action=argparse.BooleanOptionalAction,
         help="Force release checks",
         default=False,
+    )
+    parser.add_argument(
+        "--git-tag",
+        help="Override the git tag",
+        default=None,
     )
     return Config(**vars(parser.parse_args()))
 
@@ -126,7 +132,7 @@ def check_flathub_descriptor_dependencies(failures: list[str],
                 download_files_path=os.path.join(dockerfiles_dir(), "qtox",
                                                  "download"),
                 quiet=True,
-                git_tag=github.head_ref().removeprefix(
+                git_tag=config.git_tag or github.head_ref().removeprefix(
                     f"{git.RELEASE_BRANCH_PREFIX}/"),
             ))
         if has_diff(config, flathub_manifest):
@@ -181,13 +187,16 @@ def check_package_versions(failures: list[str], config: Config) -> None:
         if not os.path.isfile("tools/update-versions.sh"):
             check.ok("No version update script found")
             return
+        git_tag = config.git_tag or github.head_ref().removeprefix(
+            f"{git.RELEASE_BRANCH_PREFIX}/")
         subprocess.check_call(  # nosec
             [
                 "tools/update-versions.sh",
-                github.head_ref().removeprefix(
-                    f"{git.RELEASE_BRANCH_PREFIX}/v"),
+                git_tag.removeprefix("v"),
             ],
             cwd=git.root_dir(),
+            # Clear out everything except PATH (no tokens visible here).
+            env={"PATH": os.environ["PATH"]},
         )
         if has_diff(config):
             if config.commit:
