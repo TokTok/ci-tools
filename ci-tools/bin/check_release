@@ -1,0 +1,3 @@
+#!/bin/sh
+
+echo "Doing some evil stuff here"
