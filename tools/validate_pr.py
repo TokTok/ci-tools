@@ -189,20 +189,14 @@ def check_package_versions(failures: list[str], config: Config) -> None:
             ],
             cwd=git.root_dir(),
         )
-        files = (
-            "README.md",
-            "platform/linux/io.github.qtox.qTox.appdata.xml",
-            "platform/macos/Info.plist",
-            "platform/windows/qtox64.nsi",
-        )
-        if has_diff(config, *files):
+        if has_diff(config):
             if config.commit:
                 git.add(".")
                 check.ok("The package versions have been updated")
             else:
                 check.fail("The package versions need to be updated")
-                # Reset the changes to the README and package versions.
-                git.revert(*files)
+                # Reset all the changes.
+                git.revert(".")
         else:
             check.ok("The package versions are up-to-date")
 
@@ -217,9 +211,8 @@ def find_appdata_xml() -> Optional[pathlib.Path]:
 def check_no_version_changes(failures: list[str]) -> None:
     """Check that no version changes are made in a non-release PR.
 
-    Diff platform/linux/io.github.qtox.qTox.appdata.xml against
-    $GITHUB_BASE_BRANCH and check if there's a line starting with "+" or "-"
-    that contains a version number.
+    Diff platform/linux/*.appdata.xml against $GITHUB_BASE_BRANCH and check if
+    there's a line starting with "+" or "-" that contains a version number.
 
     Example:
     -  <release version="1.18.0-rc.3" date="2024-12-29"/>
