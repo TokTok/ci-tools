@@ -209,7 +209,7 @@ def main(config: Config) -> None:
 
     for module in flathub_manifest["modules"]:
         module_name = str(module["name"])
-        if module_name.lower() == self_name:
+        if module_name.lower().replace("-", "") == self_name:
             update_git_source(module, self_version)
         else:
             filename = download_file_map.get(module_name, module_name)
