@@ -1,5 +1,8 @@
 name: release-soon
 
+# WARNING: Actions in this file can access repository secrets. They should never
+# execute code of the pull request. All scripts should be fetched from merged
+# TokTok code.
 on:
   workflow_call:
     inputs:
@@ -11,7 +14,7 @@ on:
 
 jobs:
   check:
-    if: github.event_name == 'pull_request'
+    if: github.event_name != 'push'
     permissions:
       pull-requests: write
     runs-on: ubuntu-22.04
