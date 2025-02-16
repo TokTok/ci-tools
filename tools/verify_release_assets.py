@@ -12,9 +12,6 @@ from dataclasses import dataclass
 from lib import git
 from lib import github
 
-NEEDS_SIGNATURE = (".AppImage", ".apk", ".dmg", ".exe", ".flatpak", ".gz",
-                   ".xz")
-
 
 @dataclass
 class Config:
@@ -32,6 +29,10 @@ def parse_args() -> Config:
         default=git.current_tag(),
     )
     return Config(**vars(parser.parse_args()))
+
+
+def needs_signature(name: str) -> bool:
+    return not name.endswith(".sha256") and not name.endswith(".asc")
 
 
 def verify_signature(tmpdir: str, binary: str) -> None:
@@ -61,8 +62,7 @@ def download_and_verify(
 def download_and_verify_binaries(config: Config, tmpdir: str) -> int:
     assets = github.release_assets(config.tag)
     by_name = {asset.name: asset for asset in assets}
-    todo = tuple(asset for asset in assets
-                 if asset.name.endswith(NEEDS_SIGNATURE))
+    todo = tuple(asset for asset in assets if needs_signature(asset.name))
     with multiprocessing.Pool() as pool:
         pool.map(download_and_verify,
                  [(tmpdir, asset, by_name) for asset in todo])
