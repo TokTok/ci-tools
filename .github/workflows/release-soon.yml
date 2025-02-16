@@ -11,6 +11,7 @@ on:
 
 jobs:
   check:
+    if: github.event_name == 'pull_request'
     permissions:
       pull-requests: write
     runs-on: ubuntu-22.04
