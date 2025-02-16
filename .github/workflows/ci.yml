@@ -7,3 +7,19 @@ on:
 jobs:
   common:
     uses: ./.github/workflows/common-ci.yml
+
+  mypy:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.13
+      - name: Install mypy
+        run: pip install mypy types-requests
+      - name: Run mypy
+        run: (find . -name "*.py"; grep -lR '^#!.*python') |
+          xargs -n1 -P8 mypy --strict
