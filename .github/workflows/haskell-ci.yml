@@ -1,3 +1,5 @@
+name: haskell-ci
+
 on: [workflow_call]
 
 jobs:

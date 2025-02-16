@@ -1,3 +1,5 @@
+name: common-ci
+
 on: [workflow_call]
 
 jobs:

@@ -1,3 +1,5 @@
+name: release-deploy
+
 # This workflow is called from "issues" events in repositories.
 on:
   workflow_call:
