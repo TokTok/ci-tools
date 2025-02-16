@@ -138,7 +138,7 @@ jobs:
           --set-config=max_size=200M
           --set-config=cache_dir="$PWD/.cache/ccache" && ccache --show-config
       - name: Build application bundle
-        run: platform/macos/build.sh
+        run: third_party/ci-tools/platform/macos/build.sh
           --project-name ${{ steps.artifact.outputs.project-name }}
           --build-type dist
           --arch "${{ matrix.arch }}"
