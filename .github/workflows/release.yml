@@ -4,9 +4,8 @@ on:
   issues:
     types: [assigned]
 
-# Cancel old builds when pushing new commits.
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ github.event.issue.number }}
   cancel-in-progress: true
 
 jobs:
