@@ -160,6 +160,10 @@ def stage_version(config: Config) -> str:
             git.pull(config.upstream)
         s.ok(git.branch_sha(f"{config.upstream}/{config.main_branch}")[:7])
     with stage.Stage("Version", "Determine the upcoming version") as s:
+        if config.issue:
+            issue = github.get_issue(config.issue)
+            if issue.title.startswith("Release tracking issue: "):
+                config.version = issue.title.split(": ", 1)[1]
         if config.version:
             if config.version == "latest":
                 version = github.latest_release()
@@ -715,8 +719,11 @@ def stage_publish_release(config: Config, version: str) -> None:
         s.ok("Not implemented yet")
 
 
-def stage_close_milestone(version: str) -> None:
+def stage_close_milestone(config: Config, version: str) -> None:
     with stage.Stage("Close milestone", "Closing the release milestone") as s:
+        if not config.production:
+            s.ok("Not closing milestone for release candidate")
+            return
         m = github.next_milestone()
         if m.title != version:
             raise s.fail(f"Milestone {m.title} is not the next milestone")
@@ -772,7 +779,7 @@ def run_stages(config: Config) -> None:
     stage_verify_release_assets(version)
     stage_format_release_notes(config, version)
     stage_publish_release(config, version)
-    stage_close_milestone(version)
+    stage_close_milestone(config, version)
     stage_close_issue(config)
 
 
