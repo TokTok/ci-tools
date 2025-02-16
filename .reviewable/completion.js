@@ -12,7 +12,7 @@
 // dependencies: lodash4
 
 // Helper function to check if a user is a bot.
-function isBotUser(author) {
+function isBotAuthor(author) {
   return (
     author.username.endsWith("[bot]") || author.username.startsWith("toktok-")
   );
