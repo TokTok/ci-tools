@@ -117,7 +117,7 @@ def set_release_notes(version: str,
             else:
                 continue
         updated.append(line)
-        if line.startswith("## " + version):
+        if line.startswith(f"## {version} ("):
             in_release_notes = True
 
     with open(logfile, "w") as f:
