@@ -9,14 +9,23 @@ on:
         required: false
         type: boolean
         default: false
+    secrets:
+      TOKEN_RELEASES:
+        description: |
+          A GitHub token with the `repo` scope to create releases.
+        required: true
 
 jobs:
   deploy:
     name: Create release
     permissions:
-      # write permission is required to create a github release
+      # trigger CI workflows
+      actions: write
+      # create a github release and create a release branch
       contents: write
+      # update the issue (e.g. reassigning it)
       issues: write
+      # create a release pull request
       pull-requests: write
     runs-on: ubuntu-24.04
     steps:
@@ -49,3 +58,4 @@ jobs:
           ${{ inputs.production && '--production' || '--no-production' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOKEN_RELEASES: ${{ secrets.TOKEN_RELEASES }}

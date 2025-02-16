@@ -5,6 +5,7 @@ import os
 import re
 import urllib.parse
 from dataclasses import dataclass
+from enum import Enum
 from functools import cache as memoize
 from typing import Any
 from typing import IO
@@ -15,8 +16,22 @@ from lib import git
 from lib import types
 
 
+class AuthLevel(Enum):
+    OPTIONAL = 0
+    GITHUB = 1
+    RELEASER = 2
+
+
+def _process_error(response: requests.Response) -> None:
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        print(response.json())
+        raise e
+
+
 @memoize
-def github_token() -> Optional[str]:
+def _github_token() -> Optional[str]:
     token = os.getenv("GITHUB_TOKEN")
     if token:
         print("Authorization with GITHUB_TOKEN")
@@ -26,17 +41,31 @@ def github_token() -> Optional[str]:
     return token
 
 
-def auth_headers(required: bool) -> dict[str, str]:
+@memoize
+def _releaser_token() -> Optional[str]:
+    token = os.getenv("TOKEN_RELEASES")
+    if token:
+        print("Authorization with TOKEN_RELEASES")
+    return token
+
+
+def _token(auth: AuthLevel) -> Optional[str]:
+    if auth == AuthLevel.RELEASER:
+        return _releaser_token()
+    return _github_token()
+
+
+def _auth_headers(auth: AuthLevel) -> dict[str, str]:
     """Get the authentication headers for GitHub.
 
     If the GITHUB_TOKEN environment variable is not set, this function will
     raise an error if required is True, or return an empty dictionary if
     required is False.
     """
-    token = github_token()
+    token = _token(auth)
     if not token:
-        if required:
-            raise ValueError("GITHUB_TOKEN is needed to upload tarballs")
+        if auth != AuthLevel.OPTIONAL:
+            raise ValueError("GITHUB_TOKEN is needed")
         else:
             return {}
     return {"Authorization": f"Token {token}"}
@@ -51,7 +80,7 @@ def api_url() -> str:
 
 def api_uncached(
         url: str,
-        auth: bool = False,
+        auth: AuthLevel = AuthLevel.OPTIONAL,
         params: tuple[tuple[str, str | int], ...] = tuple(),
 ) -> Any:
     """Call the GitHub API with the given URL (GET only).
@@ -61,17 +90,17 @@ def api_uncached(
     api_requests.append(f"GET {api_url()}{url}")
     response = requests.get(
         f"{api_url()}{url}",
-        headers=auth_headers(required=auth),
+        headers=_auth_headers(auth=auth),
         params=dict(params),
     )
-    response.raise_for_status()
+    _process_error(response)
     return response.json()
 
 
 @memoize
 def api(
         url: str,
-        auth: bool = False,
+        auth: AuthLevel = AuthLevel.OPTIONAL,
         params: tuple[tuple[str, str | int], ...] = tuple(),
 ) -> Any:
     """Cache-calls the GitHub API with the given URL (GET only).
@@ -93,9 +122,9 @@ def clear_cache() -> None:
 
 def username() -> Optional[str]:
     """Get the GitHub username for the current authenticated user."""
-    if not github_token():
+    if not _github_token():
         return None
-    return str(api("/user", auth=True)["login"])
+    return str(api("/user", auth=AuthLevel.GITHUB)["login"])
 
 
 def release_id(tag: str) -> int:
@@ -206,10 +235,10 @@ def close_milestone(number: int) -> None:
     """Close the milestone with the given number."""
     response = requests.patch(
         f"{api_url()}/repos/{repository()}/milestones/{number}",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json={"state": "closed"},
     )
-    response.raise_for_status()
+    _process_error(response)
 
 
 @dataclass
@@ -260,20 +289,20 @@ def rename_issue(issue_number: int, title: str) -> None:
     """Rename the issue with the given number."""
     response = requests.patch(
         f"{api_url()}/repos/{repository()}/issues/{issue_number}",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json={"title": title},
     )
-    response.raise_for_status()
+    _process_error(response)
 
 
 def close_issue(issue_number: int) -> None:
     """Close the issue with the given number."""
     response = requests.patch(
         f"{api_url()}/repos/{repository()}/issues/{issue_number}",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json={"state": "closed"},
     )
-    response.raise_for_status()
+    _process_error(response)
 
 
 def latest_release() -> str:
@@ -305,20 +334,20 @@ def issue_assign(issue_id: int, assignees: list[str]) -> None:
     """Assign the given issue to the given list of users."""
     response = requests.post(
         f"{api_url()}/repos/{repository()}/issues/{issue_id}/assignees",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json={"assignees": assignees},
     )
-    response.raise_for_status()
+    _process_error(response)
 
 
 def issue_unassign(issue_id: int, assignees: list[str]) -> None:
     """Unassign the given issue from the given list of users."""
     response = requests.delete(
         f"{api_url()}/repos/{repository()}/issues/{issue_id}/assignees",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json={"assignees": assignees},
     )
-    response.raise_for_status()
+    _process_error(response)
 
 
 @dataclass
@@ -359,7 +388,7 @@ def create_pr(title: str, body: str, head: str, base: str,
     """
     response = requests.post(
         f"{api_url()}/repos/{repository()}/pulls",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.RELEASER),
         json={
             "title": title,
             "body": body,
@@ -368,7 +397,7 @@ def create_pr(title: str, body: str, head: str, base: str,
             "draft": True,
         },
     )
-    response.raise_for_status()
+    _process_error(response)
     pr = PullRequest.fromJSON(response.json())
     if milestone:
         change_issue(pr.number, {"milestone": milestone})
@@ -413,10 +442,10 @@ def change_pr(number: int, changes: dict[str, str | int]) -> None:
     """Modify a PR with the given number (e.g. reopen by changing "state")."""
     response = requests.patch(
         f"{api_url()}/repos/{repository()}/pulls/{number}",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json=changes,
     )
-    response.raise_for_status()
+    _process_error(response)
 
 
 def change_issue(number: int, changes: dict[str, str | int]) -> None:
@@ -426,10 +455,10 @@ def change_issue(number: int, changes: dict[str, str | int]) -> None:
     """
     response = requests.patch(
         f"{api_url()}/repos/{repository()}/issues/{number}",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json=changes,
     )
-    response.raise_for_status()
+    _process_error(response)
 
 
 @dataclass
@@ -535,10 +564,10 @@ def download_asset(asset_id: int) -> bytes:
         f"{api_url()}/repos/{repository()}/releases/assets/{asset_id}",
         headers={
             "Accept": "application/octet-stream",
-            **auth_headers(False),
+            **_auth_headers(AuthLevel.OPTIONAL),
         },
     )
-    response.raise_for_status()
+    _process_error(response)
     return response.content
 
 
@@ -556,16 +585,14 @@ def upload_asset(
         f"https://uploads.github.com/repos/{repository()}/releases/{release_id(tag)}/assets",
         headers={
             "Content-Type": content_type,
-            **auth_headers(required=True),
+            **_auth_headers(AuthLevel.GITHUB),
         },
         data=data,
         params={
             "name": filename,
         },
     )
-    if response.status_code >= 400:
-        print(response.json())
-    response.raise_for_status()
+    _process_error(response)
 
 
 def graphql(query: str) -> Any:
@@ -574,11 +601,11 @@ def graphql(query: str) -> Any:
         f"{api_url()}/graphql",
         headers={
             "Accept": "application/json",
-            **auth_headers(required=True),
+            **_auth_headers(AuthLevel.GITHUB),
         },
         json={"query": query},
     )
-    response.raise_for_status()
+    _process_error(response)
     return response.json()["data"]
 
 
@@ -616,63 +643,65 @@ def push_signed(
         with open(file, "rb") as f:
             blob_response = requests.post(
                 f"{api_url()}/repos/{slug}/git/blobs",
-                headers=auth_headers(True),
+                headers=_auth_headers(AuthLevel.GITHUB),
                 json={
                     "content": f.read().decode("utf-8"),
                     "encoding": "utf-8"
                 },
             )
-            blob_response.raise_for_status()
+            _process_error(blob_response)
             tree_objects.append({
                 "path": file,
                 "mode": "100644",
                 "type": "blob",
                 "sha": blob_response.json()["sha"],
             })
+    head_sha = git.branch_sha(head_branch)
     tree_response = requests.post(
         f"{api_url()}/repos/{slug}/git/trees",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json={
-            "base_tree": git.branch_sha(head_branch),
+            "base_tree": head_sha,
             "tree": tree_objects,
         },
     )
-    tree_response.raise_for_status()
+    _process_error(tree_response)
     commit_response = requests.post(
         f"{api_url()}/repos/{slug}/git/commits",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json={
             "message": git.commit_message(commit_sha),
             "tree": tree_response.json()["sha"],
-            "parents": [git.branch_sha(head_branch)],
+            "parents": [head_sha],
         },
     )
-    commit_response.raise_for_status()
+    _process_error(commit_response)
+    target_sha = str(commit_response.json()["sha"])
     branch_response = requests.get(
         f"{api_url()}/repos/{slug}/branches/{target_branch}",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
     )
     if branch_response.status_code == 404:
         update_response = requests.post(
             f"{api_url()}/repos/{slug}/git/refs",
-            headers=auth_headers(True),
+            headers=_auth_headers(AuthLevel.RELEASER),
             json={
                 "ref": f"refs/heads/{target_branch}",
-                "sha": commit_response.json()["sha"],
+                "sha": target_sha,
             },
         )
     else:
         branch_encoded = urllib.parse.quote_plus(target_branch)
         update_response = requests.patch(
             f"{api_url()}/repos/{slug}/git/refs/heads/{branch_encoded}",
-            headers=auth_headers(True),
+            headers=_auth_headers(AuthLevel.RELEASER),
             json={
-                "sha": commit_response.json()["sha"],
-                "force": True
+                "sha": target_sha,
+                "force": True,
             },
         )
-    update_response.raise_for_status()
-    return str(commit_response.json()["sha"])
+    _process_error(update_response)
+    return target_sha
 
 
 def tag(
@@ -691,7 +720,7 @@ def tag(
         tag_message += "\n"
     tag_response = requests.post(
         f"{api_url()}/repos/{slug}/git/tags",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json={
             "tag": tag_name,
             "message": tag_message,
@@ -704,16 +733,16 @@ def tag(
             },
         },
     )
-    tag_response.raise_for_status()
+    _process_error(tag_response)
     tag_ref_response = requests.post(
         f"{api_url()}/repos/{slug}/git/refs",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json={
             "ref": f"refs/tags/{tag_name}",
             "sha": tag_response.json()["sha"],
         },
     )
-    tag_ref_response.raise_for_status()
+    _process_error(tag_ref_response)
     return str(tag_response.json()["sha"])
 
 
@@ -721,14 +750,14 @@ def set_release_notes(tag: str, notes: str, prerelease: bool) -> None:
     """Set the release notes for a given tag in the release description."""
     response = requests.patch(
         f"{api_url()}/repos/{repository()}/releases/{release_id(tag)}",
-        headers=auth_headers(True),
+        headers=_auth_headers(AuthLevel.GITHUB),
         json={
             "body": notes,
             "tag_name": tag,
             "prerelease": prerelease,
         },
     )
-    response.raise_for_status()
+    _process_error(response)
 
 
 def release_is_published(tag: str) -> bool:
