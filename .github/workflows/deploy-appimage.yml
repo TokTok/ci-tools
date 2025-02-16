@@ -90,7 +90,7 @@ jobs:
           -e GITHUB_REPOSITORY="$GITHUB_REPOSITORY"
           -e GITHUB_REF="$GITHUB_REF"
           alpine-appimage
-          platform/appimage/build.sh
+          third_party/ci-tools/platform/appimage/build.sh
           --arch ${{ matrix.arch }}
           --src-dir /qtox
           --project-name ${{ steps.artifact.outputs.project-name }}
