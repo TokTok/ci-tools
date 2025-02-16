@@ -58,18 +58,20 @@ def download_and_verify(
     verify_signature(tmpdir, asset.name)
 
 
-def download_and_verify_binaries(config: Config, tmpdir: str) -> None:
+def download_and_verify_binaries(config: Config, tmpdir: str) -> int:
     assets = github.release_assets(config.tag)
     by_name = {asset.name: asset for asset in assets}
-    todo = [asset for asset in assets if asset.name.endswith(NEEDS_SIGNATURE)]
+    todo = tuple(asset for asset in assets
+                 if asset.name.endswith(NEEDS_SIGNATURE))
     with multiprocessing.Pool() as pool:
         pool.map(download_and_verify,
                  [(tmpdir, asset, by_name) for asset in todo])
+    return len(todo)
 
 
-def main(config: Config) -> None:
+def main(config: Config) -> int:
     with tempfile.TemporaryDirectory() as tmpdir:
-        download_and_verify_binaries(config, tmpdir)
+        return download_and_verify_binaries(config, tmpdir)
 
 
 if __name__ == "__main__":

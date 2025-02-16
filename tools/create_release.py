@@ -692,8 +692,9 @@ def stage_sign_release_assets(config: Config, version: str) -> None:
 
 def stage_verify_release_assets(version: str) -> None:
     with stage.Stage("Verify release assets", "Verifying release assets") as s:
-        verify_release_assets.main(verify_release_assets.Config(tag=version))
-        s.ok("Release assets verified")
+        count = verify_release_assets.main(
+            verify_release_assets.Config(tag=version))
+        s.ok(f"Release assets verified: {count} assets")
 
 
 def stage_format_release_notes(config: Config, version: str) -> None:
