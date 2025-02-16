@@ -26,18 +26,23 @@ jobs:
           fetch-depth: 0
           submodules: true
       - name: Checkout ci-tools
+        if: github.repository != 'TokTok/ci-tools'
         uses: actions/checkout@v4
         with:
           repository: TokTok/ci-tools
-          path: ci-tools
+          path: third_party/ci-tools
+          submodules: true
+      - name: Link ci-tools
+        if: github.repository == 'TokTok/ci-tools'
+        run: ln -s .. third_party/ci-tools
       - name: Create GitHub actions identity
-        run: ci-tools/tools/use_github_actions_identity.sh
+        run: third_party/ci-tools/tools/use_github_actions_identity.sh
       - name: Set up git upstream remote
-        run: ci-tools/tools/add_upstream_remote.sh
+        run: third_party/ci-tools/tools/add_upstream_remote.sh
       - name: Import developer keys
-        run: ci-tools/tools/import_developer_keys.sh
+        run: third_party/ci-tools/tools/import_developer_keys.sh
       - name: Create release
-        run: ci-tools/tools/create_release.py
+        run: third_party/ci-tools/tools/create_release.py
           --github-actions
           --upstream=origin
           --issue=${{ github.event.issue.number }}
