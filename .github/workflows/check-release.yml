@@ -17,10 +17,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: TokTok/ci-tools
-          path: ci-tools
+          # Put it outside the repository to avoid people putting ci-tools in
+          # the repository and overwriting the script.
+          path: /tmp/ci-tools
 
       - name: Check version against GitHub releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_MILESTONE: ${{ github.event.pull_request.milestone.title }}
-        run: $GITHUB_WORKSPACE/ci-tools/bin/check_release
+        run: /tmp/ci-tools/bin/check_release
