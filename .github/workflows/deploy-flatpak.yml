@@ -99,7 +99,7 @@ jobs:
         run: docker compose run
           --rm
           flatpak
-          platform/flatpak/build.sh
+          third_party/ci-tools/platform/flatpak/build.sh
           ${{ steps.artifact.outputs.project-name }}
           ${{ inputs.org-name }}
 
