@@ -199,7 +199,7 @@ def main(config: Config) -> None:
     flathub_manifest = load_flathub_manifest(config.flathub_manifest_path)
 
     self_version = config.git_tag or git.current_tag()
-    self_name = GIT_ROOT.name.lower()
+    self_name = GIT_ROOT.name.lower().replace("-", "")
 
     download_files_dir = pathlib.Path(config.download_files_path)
     download_file_map = {
