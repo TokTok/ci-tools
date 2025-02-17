@@ -2,9 +2,9 @@
 
 Version: 0.8.1
 
-This repository contains tools for working with the TokTok Haskell
-repositories. Its purpose is mainly to centralise the costly building of
-external tools like `hlint` and `stylish-haskell`, which otherwise each Travis
-build would have to do, itself. We also store some smaller scripts here that
-support the Travis builds, so we can reduce duplication between the separate
-Travis build configurations.
+This repository contains tools for working with the TokTok repositories and
+common workflows shared across most repositories Continuous Integration and
+Delivery machinery.
+
+More command line tools for working with git and GitHub are available in the
+[github-tools](https://github.com/TokTok/hs-github-tools) project.
