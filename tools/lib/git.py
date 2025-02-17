@@ -87,28 +87,24 @@ class Stash:
         if diff_exitcode():
             print("Stashing changes.")
             self.stashed = True
-            subprocess.run(  # nosec
+            subprocess.check_call(  # nosec
                 [
                     "git",
                     "stash",
                     "--quiet",
                     "--include-untracked",
-                ],
-                check=True,
-            )
+                ])
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         if self.stashed:
             print("Restoring stashed changes.")
-            subprocess.run(  # nosec
+            subprocess.check_call(  # nosec
                 [
                     "git",
                     "stash",
                     "pop",
                     "--quiet",
-                ],
-                check=True,
-            )
+                ])
 
 
 class Checkout:
@@ -120,28 +116,24 @@ class Checkout:
     def __enter__(self) -> None:
         if self.branch != current_branch():
             print(f"Checking out {self.branch} (from {self.old_branch}).")
-            subprocess.run(  # nosec
+            subprocess.check_call(  # nosec
                 [
                     "git",
                     "checkout",
                     "--quiet",
                     self.branch,
-                ],
-                check=True,
-            )
+                ])
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         if self.old_branch != current_branch():
             print(f"Moving back to {self.old_branch}.")
-            subprocess.run(  # nosec
+            subprocess.check_call(  # nosec
                 [
                     "git",
                     "checkout",
                     "--quiet",
                     self.old_branch,
-                ],
-                check=True,
-            )
+                ])
 
 
 class ResetOnExit:
@@ -153,15 +145,13 @@ class ResetOnExit:
         pass
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        subprocess.run(  # nosec
+        subprocess.check_call(  # nosec
             [
                 "git",
                 "reset",
                 "--quiet",
                 "--hard",
-            ],
-            check=True,
-        )
+            ])
 
 
 @memoize
@@ -187,7 +177,7 @@ def fetch(*remotes: str) -> None:
     branches, tags, and prunes stale references. Overwrites local tags if they
     have been updated on the remote.
     """
-    subprocess.run(  # nosec
+    subprocess.check_call(  # nosec
         [
             "git",
             "fetch",
@@ -197,14 +187,12 @@ def fetch(*remotes: str) -> None:
             "--force",
             "--multiple",
             *remotes,
-        ],
-        check=True,
-    )
+        ])
 
 
 def pull(remote: str) -> None:
     """Pull changes from the current branch and remote."""
-    subprocess.run(  # nosec
+    subprocess.check_call(  # nosec
         [
             "git",
             "pull",
@@ -212,9 +200,7 @@ def pull(remote: str) -> None:
             "--quiet",
             remote,
             current_branch(),
-        ],
-        check=True,
-    )
+        ])
 
 
 def remote_slug(remote: str) -> types.RepoSlug:
@@ -307,7 +293,7 @@ def release_tag_exists(tag: str) -> bool:
 
 def tag(tag: str, message: str, sign: bool) -> None:
     """Create a signed tag with a message."""
-    subprocess.run(  # nosec
+    subprocess.check_call(  # nosec
         [
             "git",
             "tag",
@@ -316,9 +302,7 @@ def tag(tag: str, message: str, sign: bool) -> None:
             "--message",
             message,
             tag,
-        ],
-        check=True,
-    )
+        ])
 
 
 def release_branches() -> list[str]:
@@ -374,23 +358,71 @@ def current_tag() -> str:
         ]).decode("utf-8").strip())
 
 
+def tag_has_signature(tag: str) -> bool:
+    """Check if a tag has a signature."""
+    return b"-----BEGIN PGP SIGNATURE-----" in subprocess.check_output(  # nosec
+        [
+            "git",
+            "cat-file",
+            "tag",
+            tag,
+        ])
+
+
+def verify_tag(tag: str) -> bool:
+    """Verify the signature of a tag."""
+    return (subprocess.run(  # nosec
+        [
+            "git",
+            "verify-tag",
+            "--verbose",
+            tag,
+        ],
+        check=False,
+    ).returncode == 0)
+
+
+def sign_tag(tag: str) -> None:
+    """Sign a tag with its original message."""
+    subprocess.check_call(  # nosec
+        [
+            "git",
+            "tag",
+            "--sign",
+            "--force",
+            tag,
+            f"{tag}^{{}}",
+        ])
+
+
+def push_tag(tag: str, remote: str) -> None:
+    """Push a tag to a remote."""
+    subprocess.check_call(  # nosec
+        [
+            "git",
+            "push",
+            "--quiet",
+            "--force",
+            remote,
+            tag,
+        ])
+
+
 def checkout(branch: str) -> None:
     """Checkout a branch."""
-    subprocess.run(  # nosec
+    subprocess.check_call(  # nosec
         [
             "git",
             "checkout",
             "--quiet",
             branch,
-        ],
-        check=True,
-    )
+        ])
 
 
 def revert(*files: str) -> None:
     """Checkout files."""
     branch = current_branch()
-    subprocess.run(  # nosec
+    subprocess.check_call(  # nosec
         [
             "git",
             "checkout",
@@ -398,35 +430,29 @@ def revert(*files: str) -> None:
             branch,
             "--",
             *files,
-        ],
-        check=True,
-    )
+        ])
 
 
 def add(*files: str) -> None:
     """Add files to the index."""
-    subprocess.run(  # nosec
+    subprocess.check_call(  # nosec
         [
             "git",
             "add",
             *files,
-        ],
-        check=True,
-    )
+        ])
 
 
 def reset(branch: str) -> None:
     """Reset a branch to a specific commit."""
-    subprocess.run(  # nosec
+    subprocess.check_call(  # nosec
         [
             "git",
             "reset",
             "--quiet",
             "--hard",
             branch,
-        ],
-        check=True,
-    )
+        ])
 
 
 def rebase(onto: str, commits: int = 0) -> bool:
@@ -438,18 +464,16 @@ def rebase(onto: str, commits: int = 0) -> bool:
     """
     old_sha = branch_sha("HEAD")
     if not commits:
-        subprocess.run(  # nosec
+        subprocess.check_call(  # nosec
             [
                 "git",
                 "rebase",
                 "--quiet",
                 onto,
-            ],
-            check=True,
-        )
+            ])
     else:
         branch = current_branch()
-        subprocess.run(  # nosec
+        subprocess.check_call(  # nosec
             [
                 "git",
                 "rebase",
@@ -457,9 +481,7 @@ def rebase(onto: str, commits: int = 0) -> bool:
                 "--onto",
                 onto,
                 f"HEAD~{commits}",
-            ],
-            check=True,
-        )
+            ])
         new_sha = branch_sha("HEAD")
         checkout(branch)
         reset(new_sha)
@@ -468,7 +490,7 @@ def rebase(onto: str, commits: int = 0) -> bool:
 
 def create_branch(branch: str, base: str) -> None:
     """Create a branch from a base branch."""
-    subprocess.run(  # nosec
+    subprocess.check_call(  # nosec
         [
             "git",
             "checkout",
@@ -476,15 +498,13 @@ def create_branch(branch: str, base: str) -> None:
             "-b",
             branch,
             base,
-        ],
-        check=True,
-    )
+        ])
 
 
 def push(remote: str, branch: str, force: bool = False) -> None:
     """Push the current branch to a remote."""
     force_flag = ["--force"] if force else []
-    subprocess.run(  # nosec
+    subprocess.check_call(  # nosec
         [
             "git",
             "push",
@@ -493,9 +513,7 @@ def push(remote: str, branch: str, force: bool = False) -> None:
             "--set-upstream",
             remote,
             branch,
-        ],
-        check=True,
-    )
+        ])
 
 
 def list_changed_files() -> list[str]:
@@ -553,7 +571,7 @@ def commit(title: str, body: str) -> None:
     """
     amend = ["--amend"] if last_commit_message(
         current_branch()) == title else []
-    subprocess.run(  # nosec
+    subprocess.check_call(  # nosec
         [
             "git",
             "commit",
@@ -563,9 +581,7 @@ def commit(title: str, body: str) -> None:
             title,
             "--message",
             body,
-        ],
-        check=True,
-    )
+        ])
 
 
 def files_changed(commit: str) -> list[str]:
