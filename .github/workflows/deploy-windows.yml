@@ -96,7 +96,7 @@ jobs:
         run: docker compose run
           --rm
           windows_builder.${{ matrix.arch }}
-          platform/windows/cross-compile/build.sh
+          third_party/ci-tools/platform/windows/cross-compile/build.sh
           --project-name ${{ steps.artifact.outputs.project-name }}
           --arch ${{ matrix.arch }}
           --build-type ${{ matrix.build-type }}
