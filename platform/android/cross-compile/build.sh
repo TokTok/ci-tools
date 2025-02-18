@@ -35,7 +35,7 @@ done
 
 echo "Building $BUILD_TYPE build for $ARCH"
 
-export QT_ANDROID_KEYSTORE_PATH="$PWD/platform/android/keystore.jks"
+export QT_ANDROID_KEYSTORE_PATH="$PWD/third_party/ci-tools/platform/android/keystore.jks"
 export QT_ANDROID_KEYSTORE_ALIAS=mydomain
 export QT_ANDROID_KEYSTORE_STORE_PASS=aoeuaoeu
 export QT_ANDROID_KEYSTORE_KEY_PASS=aoeuaoeu
