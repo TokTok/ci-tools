@@ -11,6 +11,7 @@ PROJECT_SRC_DIR="$2"
 BUNDLE_PATH="$(realpath "$3")"
 
 BUILD_DIR="$(realpath "$BUNDLE_PATH/..")"
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 
 APP_VER=$(defaults read "$BUNDLE_PATH/Contents/Info.plist" CFBundleVersion)
 BINARY_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
@@ -36,7 +37,7 @@ createdmg() {
     --volname "$PROJECT_NAME $APP_VER" \
     --volicon "$PROJECT_SRC_DIR/resources/images/icons/$BINARY_NAME.icns" \
     --background "$PROJECT_SRC_DIR/platform/macos/backgroundImage.tiff" \
-    --eula "$PROJECT_SRC_DIR/platform/macos/gplv3.rtf" \
+    --eula "$SCRIPT_DIR/gplv3.rtf" \
     --window-pos 200 120 \
     --window-size 640 480 \
     --icon-size 128 \

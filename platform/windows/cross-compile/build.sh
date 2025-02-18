@@ -51,6 +51,8 @@ git describe --tags --match 'v*'
 
 # Common directory paths
 
+GIT_ROOT=$(git rev-parse --show-toplevel)
+
 PROJECT_BUILD_DIR="_build-$WINEARCH"
 readonly PROJECT_BUILD_DIR
 PROJECT_PREFIX_DIR="$(realpath install-prefix)"
@@ -134,13 +136,13 @@ elif [ "$ARCH" == "x86_64" ]; then
   DLL_DEPS+=(libgcc_s_seh-1.dll)
 fi
 
-# Add all the DLL dependencies from $SCRIPT_DIR/dll-deps to DLL_DEPS.
+# Add all the DLL dependencies from the local dll-deps file to DLL_DEPS.
 # Ignore lines starting with # and empty lines.
 while IFS= read -r line; do
   if [ -n "$line" ] && [ "${line:0:1}" != "#" ]; then
     DLL_DEPS+=("$line")
   fi
-done <"$SCRIPT_DIR/dll-deps"
+done <"$GIT_ROOT/platform/windows/cross-compile/dll-deps"
 
 # If tls/qopensslbackend.dll is in the DLL_DEPS, add the OpenSSL DLLs.
 if [[ " ${DLL_DEPS[*]} " == *" tls/qopensslbackend.dll "* ]]; then
@@ -242,7 +244,7 @@ rm -f dlls-required
 
 # Create a tree of all required dlls
 # Assumes all .exe files are directly in $PROJECT_PREFIX_DIR, not in subdirs
-platform/windows/cross-compile/check-dlls "-j$(nproc)" \
+"$SCRIPT_DIR/check-dlls" "-j$(nproc)" \
   EXES="$(cat exes runtime-dlls)" \
   ARCH="$ARCH" \
   BUILD_DIR="$PROJECT_BUILD_DIR" \

@@ -12,9 +12,14 @@ ORG_NAME=$2
 
 BINARY_NAME=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')
 
+# https://stackoverflow.com/questions/72978485/git-submodule-update-failed-with-fatal-detected-dubious-ownership-in-reposit
+git config --global --add safe.directory '*'
+
+GIT_ROOT=$(git rev-parse --show-toplevel)
+
 # use multiple cores when building
 export MAKEFLAGS="-j$(nproc)"
-FLATPAK_DESCRIPTOR="$(dirname "$(realpath "$0")")/$ORG_NAME.$PROJECT_NAME.json"
+FLATPAK_DESCRIPTOR="$GIT_ROOT/platform/flatpak/$ORG_NAME.$PROJECT_NAME.json"
 
 # If $FLATPAK_BUILD is set, use it as the build directory
 if [ -n "${FLATPAK_BUILD:-}" ]; then
