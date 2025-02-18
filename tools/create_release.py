@@ -10,6 +10,7 @@ from typing import Optional
 
 import create_tarballs
 import sign_release_assets
+import sign_tag
 import validate_pr
 import verify_release_assets
 from lib import changelog
@@ -607,6 +608,27 @@ def stage_tag(config: Config, version: str) -> None:
             s.ok(f"Pushed tag {version} to {config.upstream}")
 
 
+def stage_sign_tag(config: Config, version: str) -> None:
+    with stage.Stage("Sign tag", "Signing/verifying the release tag") as s:
+        git.fetch(config.upstream)
+        if git.tag_has_signature(version):
+            if not git.verify_tag(version):
+                raise s.fail(f"Tag {version} signature cannot be verified")
+            s.ok("Tag already signed")
+            return
+        if config.github_actions:
+            s.ok("Asking user to sign the tag")
+            raise assign_to_user(s, config.issue, "sign the tag")
+        sign_tag.main(
+            sign_tag.Config(
+                tag=version,
+                upstream=config.upstream,
+                verify_only=False,
+                local_only=config.dryrun,
+            ))
+        s.ok("Tag signed")
+
+
 def stage_build_binaries(config: Config, version: str) -> None:
     """Wait for GitHub Actions to build the binaries.
 
@@ -774,6 +796,7 @@ def run_stages(config: Config) -> None:
     stage_await_merged(config, version)
     stage_await_master_build(config, version)
     stage_tag(config, version)
+    stage_sign_tag(config, version)
     stage_build_binaries(config, version)
     stage_create_tarballs(version)
     stage_sign_release_assets(config, version)
