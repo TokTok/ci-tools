@@ -36,7 +36,7 @@ createdmg() {
     --volname "$PROJECT_NAME $APP_VER" \
     --volicon "$PROJECT_SRC_DIR/resources/images/icons/$BINARY_NAME.icns" \
     --background "$PROJECT_SRC_DIR/platform/macos/backgroundImage.tiff" \
-    --eula "$PROJECT_SRC_DIR/platform/macos/gplv3.rtf" \
+    --eula "$PROJECT_SRC_DIR/third_party/ci-tools/platform/macos/gplv3.rtf" \
     --window-pos 200 120 \
     --window-size 640 480 \
     --icon-size 128 \

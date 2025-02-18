@@ -16,8 +16,6 @@
 
 set -eux -o pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-
 GIT_ROOT=$(git rev-parse --show-toplevel)
 
 BINARY_NAME=${1:-}
@@ -27,7 +25,7 @@ if [ -z "$BINARY_NAME" ]; then
   BINARY_NAME=$(basename "$GIT_ROOT" | tr '[:upper:]' '[:lower:]')
 fi
 
-cd "$SCRIPT_DIR"
+cd "$GIT_ROOT/platform/windows"
 
 # Black, gray and transparent colors from Windows 16-color palette
 base64 -d <<<R0lGODlhBAABAPEAAAAAAAAAAICAgMDAwCH5BAEAAAAALAAAAAAEAAEAAAIDjAYFADs= >pal.gif

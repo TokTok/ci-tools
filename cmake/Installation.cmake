@@ -30,9 +30,20 @@ if(APPLE)
     install(FILES ${icon} DESTINATION ${BUNDLE_PATH}/Contents/Resources/)
   endforeach()
 
+  # Search for createdmg in ../ci_tools/platform/macos and
+  # third_party/ci-tools/platform/macos. If it doesn't exist anywhere, download it.
+  if(EXISTS "${CMAKE_SOURCE_DIR}/../ci_tools/platform/macos/createdmg")
+    set(CREATE_DMG "${CMAKE_SOURCE_DIR}/../ci_tools/platform/macos/createdmg")
+  elseif(EXISTS "${CMAKE_SOURCE_DIR}/third_party/ci-tools/platform/macos/createdmg")
+    set(CREATE_DMG "${CMAKE_SOURCE_DIR}/third_party/ci-tools/platform/macos/createdmg")
+  else()
+    set(CREATE_DMG "${CMAKE_BINARY_DIR}/createdmg")
+    file(DOWNLOAD "https://raw.githubusercontent.com/TokTok/ci-tools/master/platform/macos/createdmg" "${CREATE_DMG}")
+  endif()
+
   install(CODE "
   message(STATUS \"Creating dmg image\")
-  execute_process(COMMAND ${CMAKE_SOURCE_DIR}/platform/macos/createdmg ${PROJECT_NAME} ${CMAKE_SOURCE_DIR} ${BUNDLE_PATH})
+  execute_process(COMMAND ${CREATE_DMG} ${PROJECT_NAME} ${CMAKE_SOURCE_DIR} ${BUNDLE_PATH})
   " COMPONENT Runtime
   )
 elseif(WIN32)
