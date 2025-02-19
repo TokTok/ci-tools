@@ -188,6 +188,54 @@ def stage_version(config: Config) -> str:
     return version
 
 
+def stage_rename_issue(config: Config, version: str) -> None:
+    with stage.Stage("Rename issue",
+                     "Renaming the release tracking issue") as s:
+        if not config.issue:
+            s.ok("No issue to rename")
+            return
+        title = release_issue_title(version)
+        issue = github.get_issue(config.issue)
+        if issue.title == title:
+            s.ok(f"Issue already named '{title}'")
+            return
+        github.rename_issue(config.issue, title)
+        s.ok(f"Issue renamed to '{title}'")
+
+
+def stage_assign_milestone(config: Config, version: str) -> None:
+    with stage.Stage("Assign milestone",
+                     "Assigning the release milestone to the issue") as s:
+        if not config.issue:
+            s.ok("No issue to assign")
+            return
+        m = github.milestone(version)
+        github.assign_milestone(config.issue, m.number)
+        s.ok(f"Issue assigned to milestone {m.title}")
+
+
+def stage_production_ready(config: Config, version: str) -> None:
+    """For production releases, check whether there are any more issues in the milestone.
+
+    For release candidates, we allow more issues to be on the milestone's todo list.
+    """
+    with stage.Stage("Production ready",
+                     "Checking if the release has any more open issues") as s:
+        if config.production:
+            m = github.next_milestone()
+            issues = [
+                i for i in github.open_milestone_issues(m.number)
+                if i.title != release_commit_message(version)
+                and i.number != config.issue
+            ]
+            if issues:
+                raise s.fail(f"{len(issues)} issues are still open for "
+                             f"{version}: {m.html_url}")
+            s.ok(f"No open issues for {version}")
+        else:
+            s.ok("Release candidate; not checking milestone")
+
+
 def release_commit_message(version: str) -> str:
     return f"chore: Release {version}"
 
@@ -472,43 +520,6 @@ def stage_await_checks(config: Config, version: str) -> None:
         raise s.fail("Timeout waiting for checks to pass")
 
 
-def stage_production_ready(config: Config, version: str) -> None:
-    """For production releases, check whether there are any more issues in the milestone.
-
-    For release candidates, we allow more issues to be on the milestone's todo list.
-    """
-    with stage.Stage("Production ready",
-                     "Checking if the release has any more open issues") as s:
-        if config.production:
-            m = github.next_milestone()
-            issues = [
-                i for i in github.open_milestone_issues(m.number)
-                if i.title != release_commit_message(version)
-                and i.number != config.issue
-            ]
-            if issues:
-                raise s.fail(f"{len(issues)} issues are still open for "
-                             f"{version}: {m.html_url}")
-            s.ok(f"No open issues for {version}")
-        else:
-            s.ok("Release candidate; not checking milestone")
-
-
-def stage_rename_issue(config: Config, version: str) -> None:
-    with stage.Stage("Rename issue",
-                     "Renaming the release tracking issue") as s:
-        if not config.issue:
-            s.ok("No issue to rename")
-            return
-        title = release_issue_title(version)
-        issue = github.get_issue(config.issue)
-        if issue.title == title:
-            s.ok(f"Issue already named '{title}'")
-            return
-        github.rename_issue(config.issue, title)
-        s.ok(f"Issue renamed to '{title}'")
-
-
 def stage_ready_for_review(config: Config, version: str) -> None:
     with stage.Stage("Ready for review",
                      "Marking PR as ready for review") as s:
@@ -708,7 +719,7 @@ def stage_sign_release_assets(config: Config, version: str) -> None:
             raise assign_to_user(s, config.issue, "sign the assets")
 
         sign_release_assets.main(
-            sign_release_assets.Config(upload=True, tag=version))
+            sign_release_assets.Config(upload=True, tag=version), [])
         s.ok("Release assets signed")
 
 
@@ -775,6 +786,7 @@ def run_stages(config: Config) -> None:
 
     version = stage_version(config)
     stage_rename_issue(config, version)
+    stage_assign_milestone(config, version)
     stage_production_ready(config, version)
 
     if release_commit_message(version) not in git.log(config.main_branch):

@@ -136,7 +136,7 @@ def release_id(tag: str) -> int:
     for release in api(f"/repos/{repository()}/releases"):
         if release["tag_name"] == tag:
             return int(release["id"])
-    raise ValueError(f"Release {tag} not found")
+    raise ValueError(f"Release {tag} not found in {repository()}")
 
 
 def head_ref() -> str:
@@ -218,6 +218,11 @@ def milestones() -> dict[str, Milestone]:
     }
 
 
+def milestone(title: str) -> Milestone:
+    """Get the milestone with the given title."""
+    return milestones()[title]
+
+
 def next_milestone() -> Milestone:
     """Get the next release number (based on the smallest open milestone).
 
@@ -229,6 +234,16 @@ def next_milestone() -> Milestone:
          if re.match(r"v\d+\.\d+\.\d+$", m.title)),
         key=lambda m: tuple(map(int, m.title[1:].split("."))),
     )
+
+
+def assign_milestone(issue_id: int, milestone: int) -> None:
+    """Assign the given milestone to the given issue."""
+    response = requests.patch(
+        f"{api_url()}/repos/{repository()}/issues/{issue_id}",
+        headers=_auth_headers(AuthLevel.GITHUB),
+        json={"milestone": milestone},
+    )
+    _process_error(response)
 
 
 def close_milestone(number: int) -> None:

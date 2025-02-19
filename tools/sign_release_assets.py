@@ -17,7 +17,7 @@ class Config:
     tag: str
 
 
-def parse_args() -> Config:
+def parse_args() -> tuple[Config, list[str]]:
     parser = argparse.ArgumentParser(description="""
     Download the binaries from the GitHub release, sign them, and upload
     the signatures to the GitHub release.
@@ -33,7 +33,8 @@ def parse_args() -> Config:
         help="Tag to create signatures for",
         default=git.current_tag(),
     )
-    return Config(**vars(parser.parse_args()))
+    args, unknown = parser.parse_known_args()
+    return Config(**vars(args)), unknown
 
 
 def needs_signing(name: str, asset_names: list[str]) -> bool:
@@ -41,11 +42,12 @@ def needs_signing(name: str, asset_names: list[str]) -> bool:
             and name + ".asc" not in asset_names)
 
 
-def sign_binary(binary: str, tmpdir: str) -> None:
+def sign_binary(binary: str, tmpdir: str, args: list[str]) -> None:
     print(f"Signing {binary}")
     subprocess.run(  # nosec
         [
             "gpg",
+            *args,
             "--armor",
             "--detach-sign",
             os.path.join(tmpdir, binary),
@@ -69,20 +71,21 @@ def todo(tag: str) -> list[github.ReleaseAsset]:
     ]
 
 
-def download_and_sign_binaries(config: Config, tmpdir: str) -> None:
+def download_and_sign_binaries(config: Config, tmpdir: str,
+                               args: list[str]) -> None:
     for asset in todo(config.tag):
         with open(os.path.join(tmpdir, asset.name), "wb") as f:
             print(f"Downloading {asset.name}")
             f.write(github.download_asset(asset.id))
-        sign_binary(asset.name, tmpdir)
+        sign_binary(asset.name, tmpdir, args)
         if config.upload:
             upload_signature(config.tag, tmpdir, asset.name)
 
 
-def main(config: Config) -> None:
+def main(config: Config, args: list[str]) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
-        download_and_sign_binaries(config, tmpdir)
+        download_and_sign_binaries(config, tmpdir, args)
 
 
 if __name__ == "__main__":
-    main(parse_args())
+    main(*parse_args())
