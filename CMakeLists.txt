@@ -4,7 +4,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 project(
   CiTools
-  VERSION 0.8.1
+  VERSION 0.8.2
   LANGUAGES CXX)
 
 # Project name lowercase

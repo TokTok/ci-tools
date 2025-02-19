@@ -1,3 +1,16 @@
+<a name="v0.8.2"></a>
+
+## v0.8.2 (2025-02-19)
+
+### Release notes
+
+Add @Green-Sky to trusted signers.
+
+#### Features
+
+- Add tag signature verification stage in release. ([ad4f357f](https://github.com/TokTok/ci-tools/commit/ad4f357fa463d47ce4678cd43fc854bd305ac8b4))
+- Add script for signing release tags. ([5ff8a175](https://github.com/TokTok/ci-tools/commit/5ff8a175fb700da7f28ae8425e0f924fdb66bab1))
+
 <a name="v0.8.1"></a>
 
 ## v0.8.1 (2025-02-16)
