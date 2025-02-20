@@ -209,6 +209,9 @@ def stage_assign_milestone(config: Config, version: str) -> None:
         if not config.issue:
             s.ok("No issue to assign")
             return
+        if not config.production:
+            v = git.parse_version(version)
+            version = f"v{v.major}.{v.minor}.{v.patch}"
         m = github.milestone(version)
         github.assign_milestone(config.issue, m.number)
         s.ok(f"Issue assigned to milestone {m.title}")
