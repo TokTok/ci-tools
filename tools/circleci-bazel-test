@@ -12,6 +12,9 @@ if [[ "${#BAZEL_ARGS[@]}" -eq 0 ]]; then
   BAZEL_ARGS=("//$REPO_DIR/...")
 fi
 
+# Show the pre-cleanup environment for debugging purposes.
+env
+
 # Only allow a few env vars to be passed through so we don't invalidate bazel
 # build caches with changes in the action environment.
 ALLOWED_ENV=(
@@ -30,7 +33,7 @@ for var in "${VARS[@]}"; do
   fi
 done
 
-# Show the environment for debugging purposes.
+# Show the post-cleanup environment for debugging purposes.
 env
 
 # Find the patchelf binary.
