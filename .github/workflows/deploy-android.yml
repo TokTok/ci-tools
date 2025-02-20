@@ -74,7 +74,7 @@ jobs:
 
           ARTIFACT="$PROJECT_NAME.apk"
           echo "artifact-source=$ARTIFACT" >>$GITHUB_OUTPUT
-          echo "artifact-versioned=$PROJECT_NAME-\$VERSION-${{ matrix.arch }}-$ARTIFACT_TYPE-${{ matrix.version }}" >>$GITHUB_OUTPUT
+          echo "artifact-versioned=$PROJECT_NAME-\$VERSION-${{ matrix.arch }}-$ARTIFACT_TYPE-${{ matrix.version }}.apk" >>$GITHUB_OUTPUT
 
           echo "docker_image=android_builder.${{ matrix.arch }}.${ARTIFACT_TYPE}_${{ matrix.version }}" >>$GITHUB_OUTPUT
       - name: Cache compiler output

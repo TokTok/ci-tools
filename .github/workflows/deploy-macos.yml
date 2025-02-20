@@ -245,6 +245,7 @@ jobs:
         with:
           name: ${{ steps.run.outputs.screenshot }}
           path: ${{ steps.run.outputs.screenshot }}
+          if-no-files-found: error
       - name: Upload screenshot to nightly release
         if: inputs.screenshot && github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: ncipollo/release-action@v1
