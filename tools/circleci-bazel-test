@@ -2,8 +2,13 @@
 
 set -eux -o pipefail
 
+# If there's no CIRCLE_PR_REPONAME, we're not in a PR, so do nothing.
+if [[ -z "${CIRCLE_PR_REPONAME:-}" ]]; then
+  exit 0
+fi
+
 FLAVOUR=${CIRCLE_JOB//bazel-/}
-REPO_NAME=$CIRCLE_PR_REPONAME
+REPO_NAME=$CIRCLE_PROJECT_REPONAME
 
 REPO_DIR=$(echo "$REPO_NAME" | tr - _ | tr '[:upper:]' '[:lower:]')
 
