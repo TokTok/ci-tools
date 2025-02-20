@@ -9,6 +9,7 @@ import subprocess  # nosec
 import tomllib
 from dataclasses import dataclass
 from datetime import datetime
+from datetime import timezone
 from typing import Any
 from typing import Iterable
 from typing import Optional
@@ -178,6 +179,10 @@ def git_tag_date(tag: str) -> str:
 
     return datetime.fromtimestamp(int(
         date_match.group(1))).strftime("%Y-%m-%d")
+
+
+def today() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
 def unindent(text: str) -> str:
@@ -395,7 +400,7 @@ def format_changelog(
     - **chatlog:** Disable join and leave system messages based on setting ([ee0334ac](https://github.com/qTox/qTox/commit/ee0334acc55215ed8e94bae8fa4ff8976834af20))
     """
     version = tag[1].removeprefix(f"{git.RELEASE_BRANCH_PREFIX}/")
-    tag_date = git_tag_date(tag[0])
+    tag_date = git_tag_date(tag[0]) if version == tag[1] else today()
     tag_message = old_changelog.get(version, None)
     lines = [
         f'<a name="{version}"></a>',
