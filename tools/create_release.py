@@ -278,13 +278,16 @@ def stage_branch(config: Config, version: str) -> None:
 def stage_gitignore() -> None:
     """Ensure that third_party/ci-tools is in a .gitignore.
 
-    If the third_party directory exists, "/ci-tools" should be in
-    third_party/.gitignore. If not, "/third_party/ci-tools" should be in
-    .gitignore.
+    If third_party/.gitignore exists, "/ci-tools" should be in it. If not,
+    "/third_party/ci-tools" should be in .gitignore.
+
+    This is to ensure that the ci-tools submodule is not accidentally committed.
     """
     with stage.Stage("Gitignore",
                      "Ensuring third_party/ci-tools is ignored") as s:
-        if os.path.exists("third_party"):
+        # If third_party/.gitignore does not exist, we assume that third_party
+        # only exists because ci-tools was checked out into it.
+        if os.path.exists("third_party/.gitignore"):
             gitignore = "third_party/.gitignore"
             path = "/ci-tools"
         else:
