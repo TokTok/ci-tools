@@ -275,6 +275,33 @@ def stage_branch(config: Config, version: str) -> None:
         require(git.current_branch() == release_branch, git.current_branch())
 
 
+def stage_gitignore() -> None:
+    """Ensure that third_party/ci-tools is in a .gitignore.
+
+    If the third_party directory exists, "/ci-tools" should be in
+    third_party/.gitignore. If not, "/third_party/ci-tools" should be in
+    .gitignore.
+    """
+    with stage.Stage("Gitignore",
+                     "Ensuring third_party/ci-tools is ignored") as s:
+        if os.path.exists("third_party"):
+            gitignore = "third_party/.gitignore"
+            path = "/ci-tools"
+        else:
+            gitignore = ".gitignore"
+            path = "/third_party/ci-tools"
+
+        with open(gitignore, "r") as f:
+            if path in f.readlines():
+                s.ok(f"'{path}' already in {gitignore}")
+                return
+
+        with open(gitignore, "a") as f:
+            f.write(f"{path}\n")
+        git.add(gitignore)
+        s.ok(f"Added '{path}' to {gitignore}")
+
+
 def stage_validate(config: Config) -> None:
     validate_pr.main(validate_pr.Config(commit=not config.verify))
 
@@ -794,6 +821,7 @@ def run_stages(config: Config) -> None:
 
     if release_commit_message(version) not in git.log(config.main_branch):
         stage_branch(config, version)
+        stage_gitignore()
         stage_validate(config)
         stage_release_notes(config, version)
         stage_commit(version)
