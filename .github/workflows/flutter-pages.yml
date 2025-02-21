@@ -1,0 +1,56 @@
+name: flutter-pages
+
+on:
+  workflow_call:
+    inputs:
+      project-name:
+        description: 'Name of the application to build (e.g. btox)'
+        required: true
+        type: string
+      flutter-channel:
+        description: 'Flutter channel to use (e.g. stable, beta, dev)'
+        type: string
+        default: "stable"
+      flutter-version:
+        description: 'Flutter version to use (e.g. 3.29.0)'
+        type: string
+        default: "3.29.0"
+
+jobs:
+  deploy-pages:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    permissions:
+      contents: read
+      id-token: write
+      pages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter-channel }}
+          flutter-version: ${{ inputs.flutter-version }}
+          cache: true
+
+      - name: Build content
+        run: |
+          ./tools/prepare-web
+          flutter build web --base-href "/${{ inputs.project-name }}/"
+
+      - name: Set-up Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
