@@ -1,0 +1,388 @@
+name: flutter
+
+on:
+  workflow_call:
+    inputs:
+      project-name:
+        description: 'Name of the application to build (e.g. btox)'
+        required: true
+        type: string
+      flutter-channel:
+        description: 'Flutter channel to use (e.g. stable, beta, dev)'
+        type: string
+        default: "stable"
+      flutter-version:
+        description: 'Flutter version to use (e.g. 3.29.0)'
+        type: string
+        default: "3.29.0"
+    secrets:
+      CODECOV_TOKEN:
+        description: 'Token for Codecov (required only for master builds)'
+        required: true
+
+jobs:
+  format:
+    name: Format
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+          # Formatter changed in 3.29. We're not ready yet.
+          flutter-version: "3.27.4"
+          cache: true
+      - name: Run formatter
+        run: dart format . && git diff --exit-code
+
+  analyze:
+    name: Analyze
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter-channel }}
+          flutter-version: ${{ inputs.flutter-version }}
+          cache: true
+      - name: Generate files
+        run: ./tools/prepare
+      - name: Run analyzer
+        run: flutter analyze .
+
+  test:
+    name: Test and coverage
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter-channel }}
+          flutter-version: ${{ inputs.flutter-version }}
+          cache: true
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libsqlite3-dev
+      - name: Generate files
+        run: ./tools/prepare
+      - name: Run tests
+        run: flutter test --coverage
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+      - name: Upload failed test goldens
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-test-goldens
+          path: test/failures
+          if-no-files-found: error
+
+  android-build:
+    name: Android build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter-channel }}
+          flutter-version: ${{ inputs.flutter-version }}
+          cache: true
+      - name: Generate files
+        run: ./tools/prepare
+      - name: Build Flutter app
+        run: flutter build apk
+      - name: Copy release APK to ${{ inputs.project-name }}-android.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk ${{ inputs.project-name }}-android.apk
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-android.apk
+          path: ${{ inputs.project-name }}-android.apk
+          if-no-files-found: error
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name != 'pull_request'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: ${{ inputs.project-name }}-android.apk
+
+  linux-build:
+    name: Linux build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter-channel }}
+          flutter-version: ${{ inputs.flutter-version }}
+          cache: true
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          ninja-build libgtk-3-dev
+      - name: Generate files
+        run: ./tools/prepare
+      - name: Build Flutter app
+        run: flutter build linux
+      - name: Create tarball
+        run: tar zcf ${{ inputs.project-name }}-linux.tar.gz -C build/linux/x64/release bundle
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-linux.tar.gz
+          path: ${{ inputs.project-name }}-linux.tar.gz
+          if-no-files-found: error
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name != 'pull_request'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: ${{ inputs.project-name }}-linux.tar.gz
+
+  linux-test:
+    name: Linux screenshot
+    needs: [linux-build]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-linux.tar.gz
+      - name: Extract artifact
+        run: tar zxf ${{ inputs.project-name }}-linux.tar.gz
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          at-spi2-core imagemagick libegl1
+      - name: Run ${{ inputs.project-name }}
+        run: xvfb-run -f /tmp/xvfb.auth ./bundle/${{ inputs.project-name }} & sleep 5
+      - name: Take a screenshot
+        run: import -window root ${{ inputs.project-name }}-linux.png
+        env:
+          DISPLAY: ":99"
+          XAUTHORITY: /tmp/xvfb.auth
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-linux.png
+          path: ${{ inputs.project-name }}-linux.png
+          if-no-files-found: error
+      - name: Upload screenshot to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name != 'pull_request'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: ${{ inputs.project-name }}-linux.png
+
+  ios-build:
+    name: iOS build
+    runs-on: macos-13
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter-channel }}
+          flutter-version: ${{ inputs.flutter-version }}
+          cache: true
+      - name: Generate files
+        run: ./tools/prepare
+      - name: Build Flutter app
+        run: flutter build ios --no-codesign
+      - name: Create IPA
+        run: |
+          mkdir Payload
+          mv build/ios/iphoneos/Runner.app Payload
+          zip -r ${{ inputs.project-name }}-ios.zip Payload
+          mv ${{ inputs.project-name }}-ios.zip ${{ inputs.project-name }}-ios.ipa
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-ios.ipa
+          path: ${{ inputs.project-name }}-ios.ipa
+          if-no-files-found: error
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name != 'pull_request'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: ${{ inputs.project-name }}-ios.ipa
+
+  macos-build:
+    name: macOS build
+    runs-on: macos-14
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter-channel }}
+          flutter-version: ${{ inputs.flutter-version }}
+          cache: true
+      - name: Generate files
+        run: ./tools/prepare
+      - name: Build Flutter app
+        run: flutter build macos
+      - name: Create tarball
+        run: tar zcf ${{ inputs.project-name }}-macos.tar.gz -C build/macos/Build/Products/Release ${{ inputs.project-name }}.app
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-macos.tar.gz
+          path: ${{ inputs.project-name }}-macos.tar.gz
+          if-no-files-found: error
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name != 'pull_request'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: ${{ inputs.project-name }}-macos.tar.gz
+
+  macos-test:
+    name: macOS screenshot
+    needs: [macos-build]
+    runs-on: macos-14
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-macos.tar.gz
+      - name: Extract artifact
+        run: tar zxf ${{ inputs.project-name }}-macos.tar.gz
+      - name: Run ${{ inputs.project-name }}
+        run: ./${{ inputs.project-name }}.app/Contents/MacOS/${{ inputs.project-name }} & sleep 5
+      - name: Take a screenshot
+        run: screencapture -x ${{ inputs.project-name }}-macos.png
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-macos.png
+          path: ${{ inputs.project-name }}-macos.png
+          if-no-files-found: error
+      - name: Upload screenshot to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name != 'pull_request'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: ${{ inputs.project-name }}-macos.png
+
+  windows-build:
+    name: Windows build
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: ${{ inputs.flutter-channel }}
+          flutter-version: ${{ inputs.flutter-version }}
+          cache: true
+      - name: Generate files
+        run: ./tools/prepare
+      - name: Build Flutter app
+        run: flutter build windows
+      - name: Create tarball
+        run: tar -zcf ${{ inputs.project-name }}-windows-x64.tar.gz -C build/windows/x64/runner/Release .
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-windows-x64.tar.gz
+          path: ${{ inputs.project-name }}-windows-x64.tar.gz
+          if-no-files-found: error
+      - name: Upload to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name != 'pull_request'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: ${{ inputs.project-name }}-windows-x64.tar.gz
+
+  windows-test:
+    name: Windows screenshot
+    needs: [windows-build]
+    runs-on: windows-2022
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-windows-x64.tar.gz
+      - name: Extract artifact
+        run: tar -zxf ${{ inputs.project-name }}-windows-x64.tar.gz
+      - name: Run ${{ inputs.project-name }}
+        run: ./${{ inputs.project-name }}.exe
+      - name: Download nircmd
+        run: curl -L https://www.nirsoft.net/utils/nircmd-x64.zip -o nircmd-x64.zip && unzip nircmd-x64.zip
+      - name: Take a screenshot
+        run: ./nircmd.exe savescreenshot ${{ inputs.project-name }}-windows.png
+      - name: Upload screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.project-name }}-windows.png
+          path: ${{ inputs.project-name }}-windows.png
+          if-no-files-found: error
+      - name: Upload screenshot to nightly release
+        uses: ncipollo/release-action@v1
+        if: github.event_name != 'pull_request'
+        with:
+          allowUpdates: true
+          tag: nightly
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          prerelease: true
+          replacesArtifacts: true
+          artifacts: ${{ inputs.project-name }}-windows.png
