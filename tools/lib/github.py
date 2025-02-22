@@ -546,6 +546,24 @@ def action_runs(branch: str, head_sha: str) -> list[ActionRun]:
     ]
 
 
+def download_artifact(name: str, run_id: int) -> bytes:
+    """Download the artifact with the given name from the given run."""
+    response = requests.get(
+        f"{api_url()}/repos/{repository()}/actions/runs/{run_id}/artifacts",
+        headers=_auth_headers(AuthLevel.GITHUB),
+    )
+    _process_error(response)
+    for artifact in response.json()["artifacts"]:
+        if artifact["name"] == name:
+            response = requests.get(
+                f"{api_url()}/repos/{repository()}/actions/artifacts/{artifact['id']}/zip",
+                headers=_auth_headers(AuthLevel.GITHUB),
+            )
+            _process_error(response)
+            return response.content
+    raise ValueError(f"Artifact {name} not found in run {run_id}")
+
+
 @dataclass
 class ReleaseAsset:
     id: int
