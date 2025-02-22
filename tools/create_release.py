@@ -289,20 +289,20 @@ def stage_gitignore() -> None:
         # only exists because ci-tools was checked out into it.
         if os.path.exists("third_party/.gitignore"):
             gitignore = "third_party/.gitignore"
-            path = "/ci-tools"
+            path = "/ci-tools\n"
         else:
             gitignore = ".gitignore"
-            path = "/third_party/ci-tools"
+            path = "/third_party/ci-tools\n"
 
         with open(gitignore, "r") as f:
             if path in f.readlines():
-                s.ok(f"'{path}' already in {gitignore}")
+                s.ok(f"'{path.strip()}' already in {gitignore}")
                 return
 
         with open(gitignore, "a") as f:
-            f.write(f"{path}\n")
+            f.write(path)
         git.add(gitignore)
-        s.ok(f"Added '{path}' to {gitignore}")
+        s.ok(f"Added '{path.strip()}' to {gitignore}")
 
 
 def stage_validate(config: Config) -> None:
