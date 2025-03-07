@@ -65,7 +65,8 @@ def main(config: Config) -> None:
                 for file in z.filelist:
                     print(f"Checking {file.filename}")
                     if file.filename.endswith("_testImage.png"):
-                        base = file.filename.removesuffix("_testImage.png")
+                        base = os.path.basename(
+                            file.filename.removesuffix("_testImage.png"))
                         if base in goldens:
                             print(f"Updating {base}.png")
                             with z.open(file) as f:
