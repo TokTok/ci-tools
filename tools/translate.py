@@ -9,8 +9,8 @@ import textwrap
 import xml.dom.minidom as minidom  # nosec
 from dataclasses import dataclass
 from functools import cache as memoize
-from typing import Any
-from typing import Optional
+from typing import Any, Optional, cast
+from xml.dom.minicompat import EmptyNodeList
 
 import requests
 from lib import stage
@@ -103,7 +103,7 @@ _LANGUAGES: tuple[Language, ...] = (
     Language("zh_TW"),
 )
 
-_BAIDU_LANGUAGES = ("jbo", )
+_BAIDU_LANGUAGES = ("jbo",)
 _IGNORE_LANGUAGES = ("pr", "nl_BE", "sr_Latn")
 
 _LOCK = multiprocessing.Lock()
@@ -113,11 +113,14 @@ _LOCK = multiprocessing.Lock()
 def lupdate() -> str:
     """Return the path to the lupdate executable."""
     # If "lupdate" is in PATH, it will be used.
-    if (subprocess.run(  # nosec
-        ["which", "lupdate"],
+    if (
+        subprocess.run(  # nosec
+            ["which", "lupdate"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-    ).returncode == 0):
+        ).returncode
+        == 0
+    ):
         return "lupdate"
     # Check if we can find it in the Nix store.
     for path in glob.glob("/nix/store/*-qttools-*/bin/lupdate"):
@@ -163,13 +166,14 @@ def _fix_translation(lang: Language, source: str, text: str) -> str:
         return text
     # These are %1, %2, etc. which are used for string formatting in Qt.
     # They only go up to 3 at the moment, but we'll be safe and go up to 6.
-    for i in tuple(range(1, 6)) + ("n", ):
+    for i in tuple(range(1, 6)) + ("n",):
         if f"%{i}" in source:
             text = text.replace(f"% {i}", f"%{i}")
             if f"%{i}" not in text:
                 raise ValueError(
                     f"Missing %{i} in {lang.weblate_code} translation of "
-                    f"'{source}': '{text}'")
+                    f"'{source}': '{text}'"
+                )
     if "%" in source:
         text = text.replace("%%", "%")
     if source.startswith(" ") and not text.startswith(" "):
@@ -196,20 +200,27 @@ def _baidu_call_translate(lang: Language, text: str) -> str:
         },
     )
     response.raise_for_status()
-    events = (json.loads(line.removeprefix("data: "))
-              for line in response.text.split("\n")
-              if line.startswith("data: "))
+    events = (
+        json.loads(line.removeprefix("data: "))
+        for line in response.text.split("\n")
+        if line.startswith("data: ")
+    )
     translations = (
-        para["dst"] for event in events
+        para["dst"]
+        for event in events
         if event["data"]["event"] == "Translating" and event["data"]["list"]
-        for para in event["data"]["list"])
+        for para in event["data"]["list"]
+    )
     return "\n".join(translations)
 
 
 def _validate_translation(source: str, translation: str) -> bool:
-    for i in tuple(range(1, 6)) + ("n", ):
-        if (f"%{i}" in source and f"% {i}" not in translation
-                and f"%{i}" not in translation):
+    for i in tuple(range(1, 6)) + ("n",):
+        if (
+            f"%{i}" in source
+            and f"% {i}" not in translation
+            and f"%{i}" not in translation
+        ):
             return False
     return True
 
@@ -283,11 +294,13 @@ def _translate(lang: Language, current: int, total: int, text: str) -> str:
     )
     response.raise_for_status()
     return _fix_translation(
-        lang, text, _reflow(text, "".join([x[0] for x in response.json()[0]])))
+        lang, text, _reflow(text, "".join([x[0] for x in response.json()[0]]))
+    )
 
 
-def _need_translation(lang: Language, source: str,
-                      message: minidom.Element) -> list[Any]:
+def _need_translation(
+    lang: Language, source: str, message: minidom.Element
+) -> list[Any]:
     translation = message.getElementsByTagName("translation")
     if not translation:
         return []
@@ -304,9 +317,11 @@ def _need_translation(lang: Language, source: str,
                 translated.data = "LTR"
         return []
     translatorcomment = message.getElementsByTagName("translatorcomment")
-    if (translatorcomment
-            and isinstance(translatorcomment[0].firstChild, minidom.Text) and
-            translatorcomment[0].firstChild.data != _AUTOMATED_TRANSLATION):
+    if (
+        translatorcomment
+        and isinstance(translatorcomment[0].firstChild, minidom.Text)
+        and translatorcomment[0].firstChild.data != _AUTOMATED_TRANSLATION
+    ):
         # Skip messages with translator comments. These are probably
         # not meant to be translated.
         return []
@@ -374,9 +389,12 @@ def _translate_todo_list(
             if not translated:
                 continue
             # Clear the translation node of any existing text.
-            translation.childNodes.clear()
+            if not isinstance(translation.childNodes, EmptyNodeList):
+                translation.childNodes.clear()
             # Add the translation to the translation node.
-            translation.appendChild(dom.createTextNode(translated))
+            cast(minidom.DocumentFragment, translation).appendChild(
+                dom.createTextNode(translated)
+            )
             # Add a <translatorcomment> node to the message to indicate
             # that the translation was automated.
             if not message.getElementsByTagName("translatorcomment"):
