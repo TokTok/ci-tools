@@ -208,7 +208,9 @@ def _baidu_call_translate(lang: Language, text: str) -> str:
     translations = (
         para["dst"]
         for event in events
-        if event["data"]["event"] == "Translating" and event["data"]["list"]
+        if event["data"]
+        and event["data"]["event"] == "Translating"
+        and event["data"]["list"]
         for para in event["data"]["list"]
     )
     return "\n".join(translations)
