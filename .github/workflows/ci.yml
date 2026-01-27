@@ -9,7 +9,7 @@ jobs:
     uses: ./.github/workflows/common-ci.yml
 
   mypy:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v4
         with:

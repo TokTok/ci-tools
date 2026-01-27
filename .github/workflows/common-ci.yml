@@ -4,7 +4,7 @@ on: [workflow_call]
 
 jobs:
   buildifier:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v4
         with:
@@ -18,7 +18,7 @@ jobs:
         run: ./buildifier --lint=warn --warnings=all -mode diff $(find . -type f -name "WORKSPACE" -or -name "BUILD.*" -or -name "*.BUILD" -or -name "*.bazel")
 
   restyled:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-slim
     if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
     steps:
       - uses: actions/checkout@v4

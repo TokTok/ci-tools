@@ -5,7 +5,7 @@ on: [workflow_call]
 jobs:
   update-nightly-tag:
     name: Update nightly release tag
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-slim
     permissions:
       contents: write
     steps:
@@ -16,8 +16,10 @@ jobs:
 
   validate-pr:
     name: Validate PR
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-slim
     steps:
+      - name: Install python dependencies
+        run: sudo apt-get update && sudo apt-get install python3-requests
       - uses: actions/checkout@v4
         if: github.event_name == 'pull_request'
         with:
