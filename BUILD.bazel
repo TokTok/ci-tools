@@ -6,6 +6,9 @@ project(license = "gpl3-https")
 mypy_test(
     name = "mypy_test",
     srcs = glob(["**/*.py"]),
-    path = ["external/typeshed/stubs/requests"],
+    path = [
+        "external/typeshed/stubs/requests",
+        #"@typeshed//:stubs/requests/requests/__init__.pyi",
+    ],
     deps = ["@typeshed//:requests"],
 )

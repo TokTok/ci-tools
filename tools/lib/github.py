@@ -7,13 +7,10 @@ import urllib.parse
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache as memoize
-from typing import Any
-from typing import IO
-from typing import Optional
+from typing import IO, Any, Optional
 
 import requests
-from lib import git
-from lib import types
+from lib import git, types
 
 
 class AuthLevel(Enum):
@@ -79,9 +76,9 @@ def api_url() -> str:
 
 
 def api_uncached(
-        url: str,
-        auth: AuthLevel = AuthLevel.OPTIONAL,
-        params: tuple[tuple[str, str | int], ...] = tuple(),
+    url: str,
+    auth: AuthLevel = AuthLevel.OPTIONAL,
+    params: tuple[tuple[str, str | int], ...] = tuple(),
 ) -> Any:
     """Call the GitHub API with the given URL (GET only).
 
@@ -99,9 +96,9 @@ def api_uncached(
 
 @memoize
 def api(
-        url: str,
-        auth: AuthLevel = AuthLevel.OPTIONAL,
-        params: tuple[tuple[str, str | int], ...] = tuple(),
+    url: str,
+    auth: AuthLevel = AuthLevel.OPTIONAL,
+    params: tuple[tuple[str, str | int], ...] = tuple(),
 ) -> Any:
     """Cache-calls the GitHub API with the given URL (GET only).
 
@@ -146,12 +143,45 @@ def head_ref() -> str:
 
 def actor() -> str:
     """Returns the GitHub username for the current repository."""
-    return os.getenv("GITHUB_ACTOR") or username() or git.remote_slug(
-        "origin").name
+    github_actor = os.getenv("GITHUB_ACTOR")
+    if github_actor:
+        return github_actor
+    u = username()
+    if u:
+        return u
+    remotes = git.remotes()
+    for remote in ("origin", "upstream"):
+        if remote in remotes:
+            try:
+                slug = git.remote_slug(remote)
+                return slug.owner
+            except ValueError:
+                continue
+    raise ValueError("Could not determine GitHub actor")
 
 
 def repository() -> str:
-    return os.getenv("GITHUB_REPOSITORY") or str(git.remote_slug("upstream"))
+    github_repository = os.getenv("GITHUB_REPOSITORY")
+    if github_repository:
+        return github_repository
+    remotes = git.remotes()
+    for remote in ("upstream", "origin"):
+        if remote in remotes:
+            try:
+                slug = git.remote_slug(remote)
+                return str(slug)
+            except ValueError:
+                continue
+    raise ValueError(
+        "Could not determine repository from GITHUB_REPOSITORY or git remotes (upstream, origin)"
+    )
+
+
+def repository_name() -> str:
+    try:
+        return repository().split("/")[-1]
+    except ValueError:
+        return os.path.basename(git.root())
 
 
 def pr_number() -> int:
@@ -162,8 +192,9 @@ def pr_number() -> int:
     return int(
         api(
             f"/repos/{repository()}/pulls",
-            params=(("head", f"{actor()}:{head_ref()}"), ),
-        )[0]["number"])
+            params=(("head", f"{actor()}:{head_ref()}"),),
+        )[0]["number"]
+    )
 
 
 def ref_name() -> str:
@@ -230,8 +261,7 @@ def next_milestone() -> Milestone:
     release number is the smallest version number in the milestones list.
     """
     return min(
-        (m for m in milestones().values()
-         if re.match(r"v\d+\.\d+\.\d+$", m.title)),
+        (m for m in milestones().values() if re.match(r"v\d+\.\d+\.\d+$", m.title)),
         key=lambda m: tuple(map(int, m.title[1:].split("."))),
     )
 
@@ -277,15 +307,15 @@ class Issue:
             number=int(issue["number"]),
             html_url=str(issue["html_url"]),
             state=str(issue["state"]),
-            milestone=int(issue["milestone"]["number"])
-            if issue["milestone"] else None,
+            milestone=int(issue["milestone"]["number"]) if issue["milestone"] else None,
         )
 
 
 def open_milestone_issues(milestone: int) -> list[Issue]:
     """Get all the open issues for a given milestone."""
     return [
-        Issue.fromJSON(i) for i in api(
+        Issue.fromJSON(i)
+        for i in api(
             f"/repos/{repository()}/issues",
             params=(
                 ("milestone", milestone),
@@ -331,18 +361,15 @@ def latest_release() -> str:
 def prereleases(version: str) -> list[str]:
     """Get the names of all prereleases for a given version in the repository."""
     return [
-        r["tag_name"] for r in api(f"/repos/{repository()}/releases")
-        if f"{version}-rc." in r["tag_name"] and r["prerelease"]
-        and not r["draft"]
+        r["tag_name"]
+        for r in api(f"/repos/{repository()}/releases")
+        if f"{version}-rc." in r["tag_name"] and r["prerelease"] and not r["draft"]
     ]
 
 
 def release_candidates(version: str) -> list[int]:
     """Get the RC numbers (the number after "-rc.") for prereleases of a given version."""
-    return [
-        int(i) for r in prereleases(version)
-        for i in re.findall(r"-rc\.(\d+)$", r)
-    ]
+    return [int(i) for r in prereleases(version) for i in re.findall(r"-rc\.(\d+)$", r)]
 
 
 def issue_assign(issue_id: int, assignees: list[str]) -> None:
@@ -388,15 +415,15 @@ class PullRequest:
             html_url=str(pr["html_url"]),
             state=str(pr["state"]),
             head_sha=str(pr["head"]["sha"]),
-            milestone=int(pr["milestone"]["number"])
-            if pr["milestone"] else None,
+            milestone=int(pr["milestone"]["number"]) if pr["milestone"] else None,
             draft=bool(pr["draft"]),
             merged=pr["merged_at"] is not None,
         )
 
 
-def create_pr(title: str, body: str, head: str, base: str,
-              milestone: int) -> PullRequest:
+def create_pr(
+    title: str, body: str, head: str, base: str, milestone: int
+) -> PullRequest:
     """Create a pull request with the given title and body.
 
     Returns the URL of the created PR.
@@ -436,9 +463,9 @@ def find_pr(head_sha: str, base: str) -> Optional[PullRequest]:
     return None
 
 
-def find_pr_for_branch(head: str,
-                       base: str,
-                       state: str = "all") -> Optional[PullRequest]:
+def find_pr_for_branch(
+    head: str, base: str, state: str = "all"
+) -> Optional[PullRequest]:
     """Find a PR with the given head (actor:branch) and base."""
     # The branch may be updated, so we can't use cached API calls.
     response = api_uncached(
@@ -504,8 +531,8 @@ def checks(commit: str) -> dict[str, CheckRun]:
             f"/repos/{repository()}/commits/{commit}/check-suites",
         )["check_suites"]
         for r in api_uncached(
-            f"/repos/{repository()}/check-suites/{s['id']}/check-runs", )
-        ["check_runs"]
+            f"/repos/{repository()}/check-suites/{s['id']}/check-runs",
+        )["check_runs"]
     }
     return check_runs
 
@@ -539,7 +566,8 @@ def action_runs(branch: str, head_sha: str) -> list[ActionRun]:
     """Return all the GitHub Actions results."""
     # The PR may be updated, so we can't use cached API calls.
     return [
-        ActionRun.fromJSON(r) for r in api_uncached(
+        ActionRun.fromJSON(r)
+        for r in api_uncached(
             f"/repos/{repository()}/actions/runs",
             params=(("branch", branch), ("head_sha", head_sha)),
         )["workflow_runs"]
@@ -586,8 +614,10 @@ class ReleaseAsset:
 def release_assets(tag: str) -> list[ReleaseAsset]:
     """Return all the assets for a given tag."""
     return [
-        ReleaseAsset.fromJSON(a) for a in api_uncached(
-            f"/repos/{repository()}/releases/{release_id(tag)}")["assets"]
+        ReleaseAsset.fromJSON(a)
+        for a in api_uncached(f"/repos/{repository()}/releases/{release_id(tag)}")[
+            "assets"
+        ]
     ]
 
 
@@ -677,18 +707,17 @@ def push_signed(
             blob_response = requests.post(
                 f"{api_url()}/repos/{slug}/git/blobs",
                 headers=_auth_headers(AuthLevel.GITHUB),
-                json={
-                    "content": f.read().decode("utf-8"),
-                    "encoding": "utf-8"
-                },
+                json={"content": f.read().decode("utf-8"), "encoding": "utf-8"},
             )
             _process_error(blob_response)
-            tree_objects.append({
-                "path": file,
-                "mode": "100644",
-                "type": "blob",
-                "sha": blob_response.json()["sha"],
-            })
+            tree_objects.append(
+                {
+                    "path": file,
+                    "mode": "100644",
+                    "type": "blob",
+                    "sha": blob_response.json()["sha"],
+                }
+            )
     head_sha = git.branch_sha(head_branch)
     tree_response = requests.post(
         f"{api_url()}/repos/{slug}/git/trees",
@@ -761,8 +790,7 @@ def tag(
             "type": "commit",
             "tagger": {
                 "name": "github-actions[bot]",
-                "email":
-                "41898282+github-actions[bot]@users.noreply.github.com",
+                "email": "41898282+github-actions[bot]@users.noreply.github.com",
             },
         },
     )
@@ -798,5 +826,9 @@ def release_is_published(tag: str) -> bool:
 
     Uncached, because we want to check whether our publishing worked.
     """
-    return (api_uncached(f"/repos/{repository()}/releases/{release_id(tag)}")
-            ["published_at"] is not None)
+    return (
+        api_uncached(f"/repos/{repository()}/releases/{release_id(tag)}")[
+            "published_at"
+        ]
+        is not None
+    )

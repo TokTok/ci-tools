@@ -7,14 +7,14 @@ import subprocess  # nosec
 import tempfile
 from dataclasses import dataclass
 
-from lib import git
-from lib import github
+from lib import git, github
 
 
 @dataclass
 class Config:
     upload: bool
     tag: str
+    project_name: str
 
 
 def parse_args() -> Config:
@@ -32,10 +32,17 @@ def parse_args() -> Config:
         help="Tag to create tarballs for",
         default=git.current_tag(),
     )
-    return Config(**vars(parser.parse_args()))
+    parser.add_argument(
+        "--project-name",
+        help="Project name for the tarball prefix",
+    )
+    args = parser.parse_args()
+    if not args.project_name:
+        args.project_name = github.repository_name()
+    return Config(**vars(args))
 
 
-def create_tarballs(tag: str, tmpdir: str) -> None:
+def create_tarballs(project_name: str, tag: str, tmpdir: str) -> None:
     """Create source tarballs with both .gz and .xz for the given tag."""
     for prog in ("gzip", "xz"):
         tarname = f"{os.path.join(tmpdir, tag)}.tar"
@@ -45,7 +52,7 @@ def create_tarballs(tag: str, tmpdir: str) -> None:
                 "git",
                 "archive",
                 "--format=tar",
-                f"--prefix=qTox-{tag}/",
+                f"--prefix={project_name}-{tag}/",
                 tag,
                 f"--output={tarname}",
             ],
@@ -70,10 +77,10 @@ def upload_tarballs(tag: str, tmpdir: str) -> None:
 def main(config: Config) -> None:
     if config.upload:
         with tempfile.TemporaryDirectory() as tmpdir:
-            create_tarballs(config.tag, tmpdir)
+            create_tarballs(config.project_name, config.tag, tmpdir)
             upload_tarballs(config.tag, tmpdir)
     else:
-        create_tarballs(config.tag, ".")
+        create_tarballs(config.project_name, config.tag, ".")
 
 
 if __name__ == "__main__":
