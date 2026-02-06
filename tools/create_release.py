@@ -711,11 +711,9 @@ class Releaser:
         """Tag the release and push it to upstream."""
         with stage.Stage("Tag release", "Tagging the release") as s:
             release_notes = changelog.get_release_notes(version).notes + "\n"
-            if self.git.release_tag_exists(version):
+            tag_exists = self.git.release_tag_exists(version)
+            if tag_exists:
                 s.progress(f"Tag {version} already exists")
-                if self.config.github_actions:
-                    s.ok("No tag push required")
-                    return
             else:
                 self.git.tag(
                     version, release_notes, sign=not self.config.github_actions
@@ -724,19 +722,38 @@ class Releaser:
 
             if self.config.dryrun:
                 s.ok("Dry run; not pushing tag")
-            elif self.config.github_actions and not self.config.dryrun:
-                s.progress(f"Pushing tag {version} with GitHub API")
-                sha = self.github.tag(
-                    self.git.remote_slug(self.config.upstream),
-                    self.git.branch_sha(version),
-                    version,
-                    release_notes,
+                return
+
+            if self.config.github_actions:
+                if not tag_exists:
+                    s.progress(f"Pushing tag {version} with GitHub API")
+                    sha = self.github.tag(
+                        self.git.remote_slug(self.config.upstream),
+                        self.git.branch_sha(version),
+                        version,
+                        release_notes,
+                    )
+                else:
+                    sha = self.git.branch_sha(version)
+
+                self.github.create_release(
+                    version, release_notes, prerelease=not self.config.production
                 )
+                self.github.clear_cache()
                 self.git.fetch(self.config.upstream)
                 s.ok(f"Tagged {version} @ {sha}")
             else:
-                self.git.push(self.config.upstream, version, force=self.config.force)
-                s.ok(f"Pushed tag {version} to {self.config.upstream}")
+                if not tag_exists:
+                    self.git.push(
+                        self.config.upstream, version, force=self.config.force
+                    )
+                    s.progress(f"Pushed tag {version} to {self.config.upstream}")
+
+                self.github.create_release(
+                    version, release_notes, prerelease=not self.config.production
+                )
+                self.github.clear_cache()
+                s.ok()
 
     def stage_sign_tag(self, version: str) -> None:
         with stage.Stage("Sign tag", "Signing/verifying the release tag") as s:
@@ -927,10 +944,15 @@ class Releaser:
             self.stage_push()
             self.stage_pull_request(version)
             self.update_dashboard(version)
-            self.stage_await_checks(version)
-            if self.config.verify:
+            if not self.config.dryrun:
+                self.stage_await_checks(version)
+                if self.config.verify:
+                    return
+                self.stage_ready_for_review(version)
+
+            if self.config.dryrun:
+                print("Dry run: stopping after preparation")
                 return
-            self.stage_ready_for_review(version)
         else:
             print(
                 f"Release branch {BRANCH_PREFIX}/{version} already merged.", flush=True

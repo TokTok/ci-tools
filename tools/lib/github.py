@@ -220,6 +220,73 @@ class GitHub:
         self._process_error(response)
         return response.json()
 
+    def api_post(
+        self,
+        url: str,
+        auth: AuthLevel = AuthLevel.GITHUB,
+        json: Any = None,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        api_requests.append(f"POST {self._api_url}{url}")
+        response = requests.post(
+            f"{self._api_url}{url}",
+            headers=self._auth_headers(auth=auth),
+            json=json,
+            params=params,
+        )
+        self._process_error(response)
+        if response.content:
+            return response.json()
+        return None
+
+    def api_patch(
+        self,
+        url: str,
+        auth: AuthLevel = AuthLevel.GITHUB,
+        json: Any = None,
+    ) -> Any:
+        api_requests.append(f"PATCH {self._api_url}{url}")
+        response = requests.patch(
+            f"{self._api_url}{url}",
+            headers=self._auth_headers(auth=auth),
+            json=json,
+        )
+        self._process_error(response)
+        if response.content:
+            return response.json()
+        return None
+
+    def api_put(
+        self,
+        url: str,
+        auth: AuthLevel = AuthLevel.GITHUB,
+        json: Any = None,
+    ) -> Any:
+        api_requests.append(f"PUT {self._api_url}{url}")
+        response = requests.put(
+            f"{self._api_url}{url}",
+            headers=self._auth_headers(auth=auth),
+            json=json,
+        )
+        self._process_error(response)
+        if response.content:
+            return response.json()
+        return None
+
+    def api_delete(
+        self,
+        url: str,
+        auth: AuthLevel = AuthLevel.GITHUB,
+        json: Any = None,
+    ) -> None:
+        api_requests.append(f"DELETE {self._api_url}{url}")
+        response = requests.delete(
+            f"{self._api_url}{url}",
+            headers=self._auth_headers(auth=auth),
+            json=json,
+        )
+        self._process_error(response)
+
     def api(
         self,
         url: str,
@@ -254,11 +321,18 @@ class GitHub:
             return None
         return str(self.api("/user", auth=AuthLevel.GITHUB)["login"])
 
-    def release_id(self, tag: str) -> int:
-        """Get the GitHub release ID number for a tag."""
+    def get_release_id(self, tag: str) -> int | None:
+        """Get the GitHub release ID number for a tag, or None if not found."""
         for release in self.api(f"/repos/{self.repository()}/releases"):
             if release["tag_name"] == tag:
                 return int(release["id"])
+        return None
+
+    def release_id(self, tag: str) -> int:
+        """Get the GitHub release ID number for a tag."""
+        rid = self.get_release_id(tag)
+        if rid is not None:
+            return rid
         raise ValueError(f"Release {tag} not found in {self.repository()}")
 
     def actor(self) -> str:
@@ -325,21 +399,17 @@ class GitHub:
 
     def assign_milestone(self, issue_id: int, milestone: int) -> None:
         """Assign the given milestone to the given issue."""
-        response = requests.patch(
-            f"{self._api_url}/repos/{self.repository()}/issues/{issue_id}",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        self.api_patch(
+            f"/repos/{self.repository()}/issues/{issue_id}",
             json={"milestone": milestone},
         )
-        self._process_error(response)
 
     def close_milestone(self, number: int) -> None:
         """Close the milestone with the given number."""
-        response = requests.patch(
-            f"{self._api_url}/repos/{self.repository()}/milestones/{number}",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        self.api_patch(
+            f"/repos/{self.repository()}/milestones/{number}",
             json={"state": "closed"},
         )
-        self._process_error(response)
 
     def open_milestone_issues(self, milestone: int) -> list[Issue]:
         """Get all the open issues for a given milestone."""
@@ -362,21 +432,17 @@ class GitHub:
 
     def rename_issue(self, issue_number: int, title: str) -> None:
         """Rename the issue with the given number."""
-        response = requests.patch(
-            f"{self._api_url}/repos/{self.repository()}/issues/{issue_number}",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        self.api_patch(
+            f"/repos/{self.repository()}/issues/{issue_number}",
             json={"title": title},
         )
-        self._process_error(response)
 
     def close_issue(self, issue_number: int) -> None:
         """Close the issue with the given number."""
-        response = requests.patch(
-            f"{self._api_url}/repos/{self.repository()}/issues/{issue_number}",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        self.api_patch(
+            f"/repos/{self.repository()}/issues/{issue_number}",
             json={"state": "closed"},
         )
-        self._process_error(response)
 
     def latest_release(self) -> str:
         """Get the name of the current release in the repository."""
@@ -400,29 +466,25 @@ class GitHub:
 
     def issue_assign(self, issue_id: int, assignees: list[str]) -> None:
         """Assign the given issue to the given list of users."""
-        response = requests.post(
-            f"{self._api_url}/repos/{self.repository()}/issues/{issue_id}/assignees",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        self.api_post(
+            f"/repos/{self.repository()}/issues/{issue_id}/assignees",
             json={"assignees": assignees},
         )
-        self._process_error(response)
 
     def issue_unassign(self, issue_id: int, assignees: list[str]) -> None:
         """Unassign the given issue from the given list of users."""
-        response = requests.delete(
-            f"{self._api_url}/repos/{self.repository()}/issues/{issue_id}/assignees",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        self.api_delete(
+            f"/repos/{self.repository()}/issues/{issue_id}/assignees",
             json={"assignees": assignees},
         )
-        self._process_error(response)
 
     def create_pr(
         self, title: str, body: str, head: str, base: str, milestone: int
     ) -> PullRequest:
         """Create a pull request with the given title and body."""
-        response = requests.post(
-            f"{self._api_url}/repos/{self.repository()}/pulls",
-            headers=self._auth_headers(AuthLevel.RELEASER),
+        pr_json = self.api_post(
+            f"/repos/{self.repository()}/pulls",
+            auth=AuthLevel.RELEASER,
             json={
                 "title": title,
                 "body": body,
@@ -431,8 +493,7 @@ class GitHub:
                 "draft": True,
             },
         )
-        self._process_error(response)
-        pr = PullRequest.fromJSON(response.json())
+        pr = PullRequest.fromJSON(pr_json)
         if milestone:
             self.change_issue(pr.number, {"milestone": milestone})
         return pr
@@ -469,21 +530,17 @@ class GitHub:
 
     def change_pr(self, number: int, changes: dict[str, str | int]) -> None:
         """Modify a PR with the given number."""
-        response = requests.patch(
-            f"{self._api_url}/repos/{self.repository()}/pulls/{number}",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        self.api_patch(
+            f"/repos/{self.repository()}/pulls/{number}",
             json=changes,
         )
-        self._process_error(response)
 
     def change_issue(self, number: int, changes: dict[str, str | int]) -> None:
         """Modify an issue with the given number."""
-        response = requests.patch(
-            f"{self._api_url}/repos/{self.repository()}/issues/{number}",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        self.api_patch(
+            f"/repos/{self.repository()}/issues/{number}",
             json=changes,
         )
-        self._process_error(response)
 
     def checks(self, commit: str) -> dict[str, CheckRun]:
         """Return all the GitHub Actions results."""
@@ -527,11 +584,14 @@ class GitHub:
 
     def release_assets(self, tag: str) -> list[ReleaseAsset]:
         """Return all the assets for a given tag."""
+        rid = self.get_release_id(tag)
+        if rid is None:
+            return []
         return [
             ReleaseAsset.fromJSON(a)
-            for a in self.api_uncached(
-                f"/repos/{self.repository()}/releases/{self.release_id(tag)}"
-            )["assets"]
+            for a in self.api_uncached(f"/repos/{self.repository()}/releases/{rid}")[
+                "assets"
+            ]
         ]
 
     def download_asset(self, asset_id: int) -> bytes:
@@ -546,22 +606,39 @@ class GitHub:
         self._process_error(response)
         return response.content
 
-    def upload_asset(
-        self, tag: str, filename: str, content_type: str, data: bytes | IO[bytes]
-    ) -> None:
-        """Upload an asset to the release with the given tag."""
+    def api_post_uploads(
+        self,
+        url: str,
+        content_type: str,
+        data: Any,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        api_requests.append(f"POST https://uploads.github.com{url}")
         response = requests.post(
-            f"https://uploads.github.com/repos/{self.repository()}/releases/{self.release_id(tag)}/assets",
+            f"https://uploads.github.com{url}",
             headers={
                 "Content-Type": content_type,
                 **self._auth_headers(AuthLevel.GITHUB),
             },
             data=data,
-            params={
-                "name": filename,
-            },
+            params=params,
         )
         self._process_error(response)
+        if response.content:
+            return response.json()
+        return None
+
+    def upload_asset(
+        self, tag: str, filename: str, content_type: str, data: bytes | IO[bytes]
+    ) -> None:
+        """Upload an asset to the release with the given tag."""
+        rid = self.release_id(tag)
+        self.api_post_uploads(
+            f"/repos/{self.repository()}/releases/{rid}/assets",
+            content_type,
+            data,
+            params={"name": filename},
+        )
 
     def mark_ready_for_review(self, pr_node_id: str) -> None:
         """Mark a PR as ready for review."""
@@ -587,49 +664,50 @@ class GitHub:
         tree_objects = []
         for file in files_changed:
             with open(file, "rb") as f:
-                blob_response = requests.post(
-                    f"{self._api_url}/repos/{slug}/git/blobs",
-                    headers=self._auth_headers(AuthLevel.GITHUB),
+                blob_response = self.api_post(
+                    f"/repos/{slug}/git/blobs",
                     json={"content": f.read().decode("utf-8"), "encoding": "utf-8"},
                 )
-                self._process_error(blob_response)
                 tree_objects.append(
                     {
                         "path": file,
                         "mode": "100644",
                         "type": "blob",
-                        "sha": blob_response.json()["sha"],
+                        "sha": blob_response["sha"],
                     }
                 )
         head_sha = self.git.branch_sha(head_branch)
-        tree_response = requests.post(
-            f"{self._api_url}/repos/{slug}/git/trees",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        tree_response = self.api_post(
+            f"/repos/{slug}/git/trees",
             json={
                 "base_tree": head_sha,
                 "tree": tree_objects,
             },
         )
-        self._process_error(tree_response)
-        commit_response = requests.post(
-            f"{self._api_url}/repos/{slug}/git/commits",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        commit_response = self.api_post(
+            f"/repos/{slug}/git/commits",
             json={
                 "message": self.git.commit_message(commit_sha),
-                "tree": tree_response.json()["sha"],
+                "tree": tree_response["sha"],
                 "parents": [head_sha],
             },
         )
-        self._process_error(commit_response)
-        target_sha = str(commit_response.json()["sha"])
-        branch_response = requests.get(
-            f"{self._api_url}/repos/{slug}/branches/{target_branch}",
-            headers=self._auth_headers(AuthLevel.GITHUB),
-        )
-        if branch_response.status_code == 404:
-            update_response = requests.post(
-                f"{self._api_url}/repos/{slug}/git/refs",
-                headers=self._auth_headers(AuthLevel.RELEASER),
+        target_sha = str(commit_response["sha"])
+        try:
+            self.api_uncached(
+                f"/repos/{slug}/branches/{target_branch}", auth=AuthLevel.GITHUB
+            )
+            branch_exists = True
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                branch_exists = False
+            else:
+                raise e
+
+        if not branch_exists:
+            self.api_post(
+                f"/repos/{slug}/git/refs",
+                auth=AuthLevel.RELEASER,
                 json={
                     "ref": f"refs/heads/{target_branch}",
                     "sha": target_sha,
@@ -637,15 +715,14 @@ class GitHub:
             )
         else:
             branch_encoded = urllib.parse.quote_plus(target_branch)
-            update_response = requests.patch(
-                f"{self._api_url}/repos/{slug}/git/refs/heads/{branch_encoded}",
-                headers=self._auth_headers(AuthLevel.RELEASER),
+            self.api_patch(
+                f"/repos/{slug}/git/refs/heads/{branch_encoded}",
+                auth=AuthLevel.RELEASER,
                 json={
                     "sha": target_sha,
                     "force": True,
                 },
             )
-        self._process_error(update_response)
         return target_sha
 
     def tag(
@@ -654,9 +731,8 @@ class GitHub:
         """Create an unsigned tag (by github-actions[bot]) for the given commit."""
         if not tag_message.endswith("\n"):
             tag_message += "\n"
-        tag_response = requests.post(
-            f"{self._api_url}/repos/{slug}/git/tags",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        tag_response = self.api_post(
+            f"/repos/{slug}/git/tags",
             json={
                 "tag": tag_name,
                 "message": tag_message,
@@ -668,37 +744,51 @@ class GitHub:
                 },
             },
         )
-        self._process_error(tag_response)
-        tag_ref_response = requests.post(
-            f"{self._api_url}/repos/{slug}/git/refs",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        self.api_post(
+            f"/repos/{slug}/git/refs",
             json={
                 "ref": f"refs/tags/{tag_name}",
-                "sha": tag_response.json()["sha"],
+                "sha": tag_response["sha"],
             },
         )
-        self._process_error(tag_ref_response)
-        return str(tag_response.json()["sha"])
+        return str(tag_response["sha"])
+
+    def create_release(self, tag: str, notes: str, prerelease: bool) -> Any:
+        """Create a new release on GitHub."""
+        rid = self.get_release_id(tag)
+        if rid:
+            return self.api_uncached(f"/repos/{self.repository()}/releases/{rid}")
+
+        return self.api_post(
+            f"/repos/{self.repository()}/releases",
+            json={
+                "tag_name": tag,
+                "body": notes,
+                "prerelease": prerelease,
+                "draft": True,
+            },
+        )
 
     def set_release_notes(self, tag: str, notes: str, prerelease: bool) -> None:
         """Set the release notes for a given tag in the release description."""
-        response = requests.patch(
-            f"{self._api_url}/repos/{self.repository()}/releases/{self.release_id(tag)}",
-            headers=self._auth_headers(AuthLevel.GITHUB),
+        self.api_patch(
+            f"/repos/{self.repository()}/releases/{self.release_id(tag)}",
             json={
                 "body": notes,
                 "tag_name": tag,
                 "prerelease": prerelease,
             },
         )
-        self._process_error(response)
 
     def release_is_published(self, tag: str) -> bool:
         """Check if the release with the given tag is published."""
+        rid = self.get_release_id(tag)
+        if rid is None:
+            return False
         return (
-            self.api_uncached(
-                f"/repos/{self.repository()}/releases/{self.release_id(tag)}"
-            )["published_at"]
+            self.api_uncached(f"/repos/{self.repository()}/releases/{rid}")[
+                "published_at"
+            ]
             is not None
         )
 
@@ -741,6 +831,10 @@ DEFAULT_GITHUB = GitHub()
 
 def username() -> str | None:
     return DEFAULT_GITHUB.username()
+
+
+def get_release_id(tag: str) -> int | None:
+    return DEFAULT_GITHUB.get_release_id(tag)
 
 
 def release_id(tag: str) -> int:

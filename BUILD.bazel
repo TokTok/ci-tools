@@ -52,6 +52,12 @@ py_test(
 )
 
 py_test(
+    name = "release_e2e_test",
+    srcs = ["tools/release_e2e_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
     name = "artifact_rename_test",
     srcs = ["tools/artifact_rename_test.py"],
     deps = [":create_release_lib"],
