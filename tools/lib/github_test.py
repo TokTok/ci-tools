@@ -2,8 +2,27 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 The TokTok team
 import unittest
+from unittest.mock import patch
 
 from lib import github
+
+
+class TestGitHubReleases(unittest.TestCase):
+    def setUp(self) -> None:
+        self.gh = github.GitHub()
+
+    def test_release_assets_not_found(self) -> None:
+        with patch.object(
+            self.gh, "repository", return_value="owner/repo"
+        ), patch.object(self.gh, "api", return_value=[]):
+            assets = self.gh.release_assets("v1.0.0")
+            self.assertEqual(assets, [])
+
+    def test_release_is_published_not_found(self) -> None:
+        with patch.object(
+            self.gh, "repository", return_value="owner/repo"
+        ), patch.object(self.gh, "api", return_value=[]):
+            self.assertFalse(self.gh.release_is_published("v1.0.0"))
 
 
 class TestMarkdownPatcher(unittest.TestCase):
