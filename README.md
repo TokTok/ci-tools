@@ -1,6 +1,6 @@
 # Continuous integration tool repository
 
-Version: 0.8.2
+Version: 0.8.3-rc.1
 
 This repository contains tools for working with the TokTok repositories and
 common workflows shared across most repositories Continuous Integration and

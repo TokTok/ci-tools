@@ -1,3 +1,39 @@
+<a name="v0.8.3-rc.1"></a>
+
+## v0.8.3-rc.1 (2026-02-06)
+
+### Release notes
+
+Some pre-release notes here.
+
+#### Bug Fixes
+
+- Don't crash the todo list update when there are no releases. ([34d2d3a9](https://github.com/TokTok/ci-tools/commit/34d2d3a967620c66a0dbe76205d35042f343209f))
+- Correct the path prefixes in release tarballs. ([f69e34f8](https://github.com/TokTok/ci-tools/commit/f69e34f8f54cffcc3b20176b8da4f9021a0797ac))
+- Add missing python dependencies in the slim image. ([299d574c](https://github.com/TokTok/ci-tools/commit/299d574c96e54645a4376a519ee2d3d696fba8e0))
+- Add check that the translation event contains data. ([ecd28e25](https://github.com/TokTok/ci-tools/commit/ecd28e2579cb71f863f6cbe4dc99b0293ddb41dd))
+- Disable clazy check as it is missing cmake dependencies. ([1dacf2dd](https://github.com/TokTok/ci-tools/commit/1dacf2dd6c9032028b83502ceb88989fde83f7d7))
+- Preserve leading spaces in automated translations. ([7075deb1](https://github.com/TokTok/ci-tools/commit/7075deb1747376879216435063aa0069a28df172))
+- Don't duplicate lines in .gitignore. ([75ebfe8f](https://github.com/TokTok/ci-tools/commit/75ebfe8f14e3f7ba30facf7503366185ed79807f))
+- Correct the android apk artifact names. ([3279f702](https://github.com/TokTok/ci-tools/commit/3279f70238a596611b692636a319a8ba27f94f28))
+- Don't add `third_party/.gitignore` if it doesn't exist. ([13d9f077](https://github.com/TokTok/ci-tools/commit/13d9f07741f4bd61323c7db7001ea1d254dd1b28))
+- Add ci-tools to the .gitignore during release. ([03d62889](https://github.com/TokTok/ci-tools/commit/03d62889b32c174022a117ef9cbf3c8fc10b6283))
+- Use "now" as the time stamp for unreleased versions. ([b4557cc2](https://github.com/TokTok/ci-tools/commit/b4557cc22aead9502c0fd60072a8a5621fe0680e))
+- milestone assignment for rc ([8a404f4a](https://github.com/TokTok/ci-tools/commit/8a404f4aa1273ab03050802ff94f9a8b7b309094))
+- Assign issue to release milestone; support gpg args. ([3c1125ba](https://github.com/TokTok/ci-tools/commit/3c1125ba5b7dced4f51aed790cba70181eb1f0a3))
+
+#### Features
+
+- Update the release tracking issue with actions required. ([54e0e065](https://github.com/TokTok/ci-tools/commit/54e0e065e6b284a8322a5780cb001d7366178f87))
+- Add script to update flutter golden images from test failures. ([c1b21075](https://github.com/TokTok/ci-tools/commit/c1b21075e5de10a14c77f02749187980b4db10f2))
+- Add a shared GitHub Pages workflow for flutter apps. ([49cba142](https://github.com/TokTok/ci-tools/commit/49cba14276570f6935d676a1e3255305a601408d))
+- Add a standardised flutter workflow. ([cd3b70ff](https://github.com/TokTok/ci-tools/commit/cd3b70ff81a61ca07a8b6e9491c91efb46202934))
+- Add a script to run bazel builds on circle ci. ([6c0ab050](https://github.com/TokTok/ci-tools/commit/6c0ab05062d788e39bf7921c470c84d7ded472e1))
+
+#### Performance
+
+- Don't run circleci stuff on anything other than PRs. ([afd28c0e](https://github.com/TokTok/ci-tools/commit/afd28c0ee8daf476840f7628264b51199c13f252))
+
 <a name="v0.8.2"></a>
 
 ## v0.8.2 (2025-02-19)
