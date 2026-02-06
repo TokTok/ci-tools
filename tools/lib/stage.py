@@ -1,9 +1,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright © 2024-2025 The TokTok team
+# Copyright © 2024-2026 The TokTok team
 import time
 from dataclasses import dataclass
-from typing import Any
-from typing import Optional
+from typing import Any, Optional
 
 sleep = time.sleep
 
@@ -127,9 +126,7 @@ class Stage:
         self.done = True
 
     def progress(self, description: str) -> None:
-        print_stage_progress(self.name,
-                             f"({description})",
-                             start_time=self.start_time)
+        print_stage_progress(self.name, f"({description})", start_time=self.start_time)
 
     def fail(self, description: str) -> InvalidState:
         print_stage_end(

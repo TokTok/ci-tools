@@ -1,20 +1,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright © 2024-2025 The TokTok team
+# Copyright © 2024-2026 The TokTok team
 import pathlib
 import re
 import subprocess  # nosec
 import unittest
 from dataclasses import dataclass
 from functools import cache as memoize
-from typing import Any
-from typing import Optional
+from typing import Any, Optional
 
 from lib import types
 
 VERSION_REGEX = re.compile(r"v\d+\.\d+(?:\.\d+)?(?:-rc\.\d+)?")
 RELEASE_BRANCH_PREFIX = "release"
-RELEASE_BRANCH_REGEX = re.compile(
-    f"{RELEASE_BRANCH_PREFIX}/{VERSION_REGEX.pattern}")
+RELEASE_BRANCH_REGEX = re.compile(f"{RELEASE_BRANCH_PREFIX}/{VERSION_REGEX.pattern}")
 
 
 @dataclass
@@ -26,7 +24,8 @@ class Version:
 
     def __str__(self) -> str:
         return f"v{self.major}.{self.minor}.{self.patch}" + (
-            f"-rc.{self.rc}" if self.rc is not None else "")
+            f"-rc.{self.rc}" if self.rc is not None else ""
+        )
 
     def __lt__(self, other: Any) -> bool:
         if not isinstance(other, Version):
@@ -66,15 +65,12 @@ class TestParseVersion(unittest.TestCase):
         self.assertLess(parse_version("v1.2.3"), parse_version("v1.2.4"))
         self.assertLess(parse_version("v1.2.3"), parse_version("v1.3.0"))
         self.assertLess(parse_version("v1.2.3"), parse_version("v2.0.0"))
-        self.assertLess(parse_version("v1.2.3-rc.1"),
-                        parse_version("v1.2.3-rc.2"))
+        self.assertLess(parse_version("v1.2.3-rc.1"), parse_version("v1.2.3-rc.2"))
         self.assertLess(parse_version("v1.2.3-rc.1"), parse_version("v1.2.3"))
         self.assertGreater(parse_version("v1.2.3"), parse_version("v1.2.2"))
-        self.assertGreater(parse_version("v1.2.3"),
-                           parse_version("v1.2.3-rc.1"))
+        self.assertGreater(parse_version("v1.2.3"), parse_version("v1.2.3-rc.1"))
         self.assertEqual(parse_version("v1.2.3"), parse_version("v1.2.3"))
-        self.assertEqual(parse_version("v1.2.3-rc.1"),
-                         parse_version("v1.2.3-rc.1"))
+        self.assertEqual(parse_version("v1.2.3-rc.1"), parse_version("v1.2.3-rc.1"))
         self.assertNotEqual(parse_version("v1.2.3"), parse_version("v1.2.4"))
 
 
@@ -93,7 +89,8 @@ class Stash:
                     "stash",
                     "--quiet",
                     "--include-untracked",
-                ])
+                ]
+            )
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         if self.stashed:
@@ -104,7 +101,8 @@ class Stash:
                     "stash",
                     "pop",
                     "--quiet",
-                ])
+                ]
+            )
 
 
 class Checkout:
@@ -122,7 +120,8 @@ class Checkout:
                     "checkout",
                     "--quiet",
                     self.branch,
-                ])
+                ]
+            )
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         if self.old_branch != current_branch():
@@ -133,7 +132,8 @@ class Checkout:
                     "checkout",
                     "--quiet",
                     self.old_branch,
-                ])
+                ]
+            )
 
 
 class ResetOnExit:
@@ -151,18 +151,24 @@ class ResetOnExit:
                 "reset",
                 "--quiet",
                 "--hard",
-            ])
+            ]
+        )
 
 
 @memoize
 def root() -> str:
     """Get the root directory of the git repository."""
-    return (subprocess.check_output(  # nosec
-        [
-            "git",
-            "rev-parse",
-            "--show-toplevel",
-        ]).strip().decode("utf-8"))
+    return (
+        subprocess.check_output(  # nosec
+            [
+                "git",
+                "rev-parse",
+                "--show-toplevel",
+            ]
+        )
+        .strip()
+        .decode("utf-8")
+    )
 
 
 def root_dir() -> pathlib.Path:
@@ -187,7 +193,8 @@ def fetch(*remotes: str) -> None:
             "--force",
             "--multiple",
             *remotes,
-        ])
+        ]
+    )
 
 
 def pull(remote: str) -> None:
@@ -200,7 +207,8 @@ def pull(remote: str) -> None:
             "--quiet",
             remote,
             current_branch(),
-        ])
+        ]
+    )
 
 
 def remote_slug(remote: str) -> types.RepoSlug:
@@ -212,7 +220,11 @@ def remote_slug(remote: str) -> types.RepoSlug:
                 "remote",
                 "get-url",
                 remote,
-            ]).strip().decode("utf-8"))
+            ]
+        )
+        .strip()
+        .decode("utf-8")
+    )
     match = re.search(r"[:/]([^/]+)/([^./]+)(?:\.git)?$", url)
     if not match:
         raise ValueError(f"Could not parse remote URL: {url}")
@@ -234,13 +246,18 @@ def remotes() -> list[str]:
 
 def branch_sha(branch: str) -> str:
     """Get the SHA of a branch."""
-    return (subprocess.check_output(  # nosec
-        [
-            "git",
-            "rev-list",
-            "--max-count=1",
-            branch,
-        ]).strip().decode("utf-8"))
+    return (
+        subprocess.check_output(  # nosec
+            [
+                "git",
+                "rev-list",
+                "--max-count=1",
+                branch,
+            ]
+        )
+        .strip()
+        .decode("utf-8")
+    )
 
 
 def branches(remote: Optional[str] = None) -> list[str]:
@@ -257,7 +274,8 @@ def branches(remote: Optional[str] = None) -> list[str]:
             "--list",
             "--no-column",
             "--format=%(refname:short)",
-        ] + ([] if remote is None else ["--remotes"]),
+        ]
+        + ([] if remote is None else ["--remotes"]),
         universal_newlines=True,
     ).splitlines()
     if remote is None:
@@ -267,20 +285,28 @@ def branches(remote: Optional[str] = None) -> list[str]:
 
 def current_branch() -> str:
     """Get the current branch name."""
-    return (subprocess.check_output(  # nosec
-        [
-            "git",
-            "rev-parse",
-            "--abbrev-ref",
-            "HEAD",
-        ]).strip().decode("utf-8"))
+    return (
+        subprocess.check_output(  # nosec
+            [
+                "git",
+                "rev-parse",
+                "--abbrev-ref",
+                "HEAD",
+            ]
+        )
+        .strip()
+        .decode("utf-8")
+    )
 
 
 def release_tags(with_rc: bool = True) -> list[str]:
     tags = subprocess.check_output(["git", "tag", "--merged"])  # nosec
     return sorted(
-        (tag for tag in tags.decode("utf-8").splitlines()
-         if re.match(VERSION_REGEX, tag) and (with_rc or "-rc." not in tag)),
+        (
+            tag
+            for tag in tags.decode("utf-8").splitlines()
+            if re.match(VERSION_REGEX, tag) and (with_rc or "-rc." not in tag)
+        ),
         reverse=True,
         key=parse_version,
     )
@@ -302,7 +328,8 @@ def tag(tag: str, message: str, sign: bool) -> None:
             "--message",
             message,
             tag,
-        ])
+        ]
+    )
 
 
 def release_branches() -> list[str]:
@@ -312,16 +339,19 @@ def release_branches() -> list[str]:
 
 def diff_exitcode(*args: str) -> bool:
     """Check if there are any changes in the git working directory."""
-    return (subprocess.run(  # nosec
-        [
-            "git",
-            "diff",
-            "--quiet",
-            "--exit-code",
-            *args,
-        ],
-        check=False,
-    ).returncode != 0)
+    return (
+        subprocess.run(  # nosec
+            [
+                "git",
+                "diff",
+                "--quiet",
+                "--exit-code",
+                *args,
+            ],
+            check=False,
+        ).returncode
+        != 0
+    )
 
 
 def is_clean() -> bool:
@@ -347,15 +377,20 @@ def changed_files() -> list[str]:
 
 def current_tag() -> str:
     """Get the most recent tag."""
-    return (subprocess.check_output(  # nosec
-        [
-            "git",
-            "describe",
-            "--tags",
-            "--abbrev=0",
-            "--match",
-            "v*",
-        ]).decode("utf-8").strip())
+    return (
+        subprocess.check_output(  # nosec
+            [
+                "git",
+                "describe",
+                "--tags",
+                "--abbrev=0",
+                "--match",
+                "v*",
+            ]
+        )
+        .decode("utf-8")
+        .strip()
+    )
 
 
 def tag_has_signature(tag: str) -> bool:
@@ -366,20 +401,24 @@ def tag_has_signature(tag: str) -> bool:
             "cat-file",
             "tag",
             tag,
-        ])
+        ]
+    )
 
 
 def verify_tag(tag: str) -> bool:
     """Verify the signature of a tag."""
-    return (subprocess.run(  # nosec
-        [
-            "git",
-            "verify-tag",
-            "--verbose",
-            tag,
-        ],
-        check=False,
-    ).returncode == 0)
+    return (
+        subprocess.run(  # nosec
+            [
+                "git",
+                "verify-tag",
+                "--verbose",
+                tag,
+            ],
+            check=False,
+        ).returncode
+        == 0
+    )
 
 
 def sign_tag(tag: str) -> None:
@@ -392,7 +431,8 @@ def sign_tag(tag: str) -> None:
             "--force",
             tag,
             f"{tag}^{{}}",
-        ])
+        ]
+    )
 
 
 def push_tag(tag: str, remote: str) -> None:
@@ -405,7 +445,8 @@ def push_tag(tag: str, remote: str) -> None:
             "--force",
             remote,
             tag,
-        ])
+        ]
+    )
 
 
 def checkout(branch: str) -> None:
@@ -416,7 +457,8 @@ def checkout(branch: str) -> None:
             "checkout",
             "--quiet",
             branch,
-        ])
+        ]
+    )
 
 
 def revert(*files: str) -> None:
@@ -430,7 +472,8 @@ def revert(*files: str) -> None:
             branch,
             "--",
             *files,
-        ])
+        ]
+    )
 
 
 def add(*files: str) -> None:
@@ -440,7 +483,8 @@ def add(*files: str) -> None:
             "git",
             "add",
             *files,
-        ])
+        ]
+    )
 
 
 def reset(branch: str) -> None:
@@ -452,7 +496,8 @@ def reset(branch: str) -> None:
             "--quiet",
             "--hard",
             branch,
-        ])
+        ]
+    )
 
 
 def rebase(onto: str, commits: int = 0) -> bool:
@@ -470,7 +515,8 @@ def rebase(onto: str, commits: int = 0) -> bool:
                 "rebase",
                 "--quiet",
                 onto,
-            ])
+            ]
+        )
     else:
         branch = current_branch()
         subprocess.check_call(  # nosec
@@ -481,7 +527,8 @@ def rebase(onto: str, commits: int = 0) -> bool:
                 "--onto",
                 onto,
                 f"HEAD~{commits}",
-            ])
+            ]
+        )
         new_sha = branch_sha("HEAD")
         checkout(branch)
         reset(new_sha)
@@ -498,7 +545,8 @@ def create_branch(branch: str, base: str) -> None:
             "-b",
             branch,
             base,
-        ])
+        ]
+    )
 
 
 def push(remote: str, branch: str, force: bool = False) -> None:
@@ -513,7 +561,8 @@ def push(remote: str, branch: str, force: bool = False) -> None:
             "--set-upstream",
             remote,
             branch,
-        ])
+        ]
+    )
 
 
 def list_changed_files() -> list[str]:
@@ -548,15 +597,20 @@ def log(branch: str, count: int = 100) -> list[str]:
 
 def find_commit_sha(message: str) -> str:
     """Find the commit SHA of a commit message."""
-    return (subprocess.check_output(  # nosec
-        [
-            "git",
-            "log",
-            "--format=%H",
-            "--grep",
-            message,
-            "-1",
-        ]).strip().decode("utf-8"))
+    return (
+        subprocess.check_output(  # nosec
+            [
+                "git",
+                "log",
+                "--format=%H",
+                "--grep",
+                message,
+                "-1",
+            ]
+        )
+        .strip()
+        .decode("utf-8")
+    )
 
 
 def last_commit_message(branch: str) -> str:
@@ -569,8 +623,7 @@ def commit(title: str, body: str) -> None:
 
     If the commit message is the same as the last commit, amend it.
     """
-    amend = ["--amend"] if last_commit_message(
-        current_branch()) == title else []
+    amend = ["--amend"] if last_commit_message(current_branch()) == title else []
     subprocess.check_call(  # nosec
         [
             "git",
@@ -581,7 +634,8 @@ def commit(title: str, body: str) -> None:
             title,
             "--message",
             body,
-        ])
+        ]
+    )
 
 
 def files_changed(commit: str) -> list[str]:
@@ -614,4 +668,5 @@ def commit_message(commit_sha: str) -> str:
 def is_up_to_date(branch: str, remote: str) -> bool:
     """Check if a branch sha is equal to its remote counterpart."""
     return branch in branches(remote) and branch_sha(branch) == branch_sha(
-        f"{remote}/{branch}")
+        f"{remote}/{branch}"
+    )

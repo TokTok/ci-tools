@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright © 2024-2025 The TokTok team
+# Copyright © 2024-2026 The TokTok team
 import argparse
 import multiprocessing
 import os
@@ -9,8 +9,7 @@ import sys
 import tempfile
 from dataclasses import dataclass
 
-from lib import git
-from lib import github
+from lib import git, github
 
 
 @dataclass
@@ -48,8 +47,8 @@ def verify_signature(tmpdir: str, binary: str) -> None:
 
 
 def download_and_verify(
-    args: tuple[str, github.ReleaseAsset, dict[str,
-                                               github.ReleaseAsset]]) -> None:
+    args: tuple[str, github.ReleaseAsset, dict[str, github.ReleaseAsset]],
+) -> None:
     tmpdir, asset, by_name = args
     print(f"Downloading {asset.name} and {asset.name}.asc", file=sys.stderr)
     with open(os.path.join(tmpdir, asset.name), "wb") as f:
@@ -64,8 +63,7 @@ def download_and_verify_binaries(config: Config, tmpdir: str) -> int:
     by_name = {asset.name: asset for asset in assets}
     todo = tuple(asset for asset in assets if needs_signature(asset.name))
     with multiprocessing.Pool() as pool:
-        pool.map(download_and_verify,
-                 [(tmpdir, asset, by_name) for asset in todo])
+        pool.map(download_and_verify, [(tmpdir, asset, by_name) for asset in todo])
     return len(todo)
 
 

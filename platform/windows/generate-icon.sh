@@ -2,7 +2,7 @@
 
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2017-2019 The qTox Project Contributors
-# Copyright © 2025 The TokTok team
+# Copyright © 2025-2026 The TokTok team
 
 # Generates $BINARY_NAME.ico from $BINARY_NAME.svg
 #

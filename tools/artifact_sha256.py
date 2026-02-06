@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright © 2025 The TokTok team
+# Copyright © 2025-2026 The TokTok team
 import os
 import subprocess  # nosec
 import sys
@@ -38,7 +38,11 @@ def main() -> None:
                             "-o1",
                             r"project\(\s*(\S+)",
                             "CMakeLists.txt",
-                        ]).decode().strip())
+                        ]
+                    )
+                    .decode()
+                    .strip()
+                )
             f.write(f"project-name={project_name}\n")
 
 

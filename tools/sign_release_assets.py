@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright © 2024-2025 The TokTok team
+# Copyright © 2024-2026 The TokTok team
 import argparse
 import os
 import subprocess  # nosec
 import tempfile
 from dataclasses import dataclass
 
-from lib import git
-from lib import github
+from lib import git, github
 
 
 @dataclass
@@ -38,8 +37,11 @@ def parse_args() -> tuple[Config, list[str]]:
 
 
 def needs_signing(name: str, asset_names: list[str]) -> bool:
-    return (not name.endswith(".sha256") and not name.endswith(".asc")
-            and name + ".asc" not in asset_names)
+    return (
+        not name.endswith(".sha256")
+        and not name.endswith(".asc")
+        and name + ".asc" not in asset_names
+    )
 
 
 def sign_binary(binary: str, tmpdir: str, args: list[str]) -> None:
@@ -59,20 +61,16 @@ def sign_binary(binary: str, tmpdir: str, args: list[str]) -> None:
 def upload_signature(tag: str, tmpdir: str, binary: str) -> None:
     print(f"Uploading signature for {binary}")
     with open(os.path.join(tmpdir, f"{binary}.asc"), "rb") as f:
-        github.upload_asset(tag, f"{binary}.asc", "application/pgp-signature",
-                            f)
+        github.upload_asset(tag, f"{binary}.asc", "application/pgp-signature", f)
 
 
 def todo(tag: str) -> list[github.ReleaseAsset]:
     assets = github.release_assets(tag)
     asset_names = [asset.name for asset in assets]
-    return [
-        asset for asset in assets if needs_signing(asset.name, asset_names)
-    ]
+    return [asset for asset in assets if needs_signing(asset.name, asset_names)]
 
 
-def download_and_sign_binaries(config: Config, tmpdir: str,
-                               args: list[str]) -> None:
+def download_and_sign_binaries(config: Config, tmpdir: str, args: list[str]) -> None:
     for asset in todo(config.tag):
         with open(os.path.join(tmpdir, asset.name), "wb") as f:
             print(f"Downloading {asset.name}")

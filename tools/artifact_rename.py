@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright © 2025 The TokTok team
+# Copyright © 2025-2026 The TokTok team
 import os
 import re
 import sys
@@ -21,7 +21,7 @@ def _glob_to_regex(original: str, renamed: str) -> tuple[str, str]:
             renamed = renamed.replace("*", f"\\{i}", 1)
             i += 1
         if "{" in renamed and "}" in renamed:
-            choice = renamed[renamed.index("{"):renamed.index("}") + 1]
+            choice = renamed[renamed.index("{") : renamed.index("}") + 1]
             if choice not in original:
                 print(f"Error: {choice} not in {original}")
                 sys.exit(1)
@@ -35,7 +35,7 @@ def _glob_to_regex(original: str, renamed: str) -> tuple[str, str]:
         if "*" in original:
             original = original.replace("*", ".+", 1)
         if "{" in original and "}" in original:
-            choice = original[original.index("{"):original.index("}") + 1]
+            choice = original[original.index("{") : original.index("}") + 1]
             matcher = choice[1:-1].replace(",", "|")
             original = original.replace(choice, f"(?:{matcher})", 1)
     return original, renamed

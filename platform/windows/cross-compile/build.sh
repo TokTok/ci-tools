@@ -2,7 +2,7 @@
 
 # SPDX-License-Identifier: MIT
 # Copyright © 2017-2021 Maxim Biro <nurupo.contributions@gmail.com>
-# Copyright © 2024-2025 The TokTok team.
+# Copyright © 2024-2026 The TokTok team.
 
 set -euo pipefail
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright © 2024-2025 The TokTok team
+# Copyright © 2024-2026 The TokTok team
 import argparse
 import os
 import pathlib
@@ -12,9 +12,7 @@ from typing import Optional
 
 import update_changelog
 import update_flathub_descriptor_dependencies
-from lib import git
-from lib import github
-from lib import stage
+from lib import git, github, stage
 
 
 @dataclass
@@ -65,15 +63,18 @@ def github_weblate_prs() -> list[tuple[str, str]]:
 
     Weblate PRs are those who are opened by the Weblate bot called "weblate".
     """
-    return [(pr["title"], pr["html_url"])
-            for pr in github.api(f"/repos/{github.repository()}/pulls")
-            if pr["user"]["login"] == "weblate"]
+    return [
+        (pr["title"], pr["html_url"])
+        for pr in github.api(f"/repos/{github.repository()}/pulls")
+        if pr["user"]["login"] == "weblate"
+    ]
 
 
 def check_github_weblate_prs(failures: list[str]) -> None:
     """Check that all Weblate PRs are merged."""
-    with stage.Stage("Weblate PRs", "All Weblate PRs should be merged",
-                     failures) as check:
+    with stage.Stage(
+        "Weblate PRs", "All Weblate PRs should be merged", failures
+    ) as check:
         weblate_prs = github_weblate_prs()
         if weblate_prs:
             check.fail("Some Weblate PRs are still open")
@@ -96,7 +97,8 @@ def dockerfiles_dir() -> pathlib.Path:
                 "--depth=1",
                 "https://github.com/TokTok/dockerfiles.git",
                 repo_dir,
-            ])
+            ]
+        )
     return repo_dir
 
 
@@ -106,20 +108,22 @@ def has_diff(config: Config, *files: str) -> bool:
     If `config.commit` is True, the diff will be quiet.
     """
     quiet = ["--quiet"] if config.commit else []
-    return (subprocess.run(  # nosec
-        ["git", "diff", *quiet, "--exit-code", *files]).returncode != 0)
+    return (
+        subprocess.run(  # nosec
+            ["git", "diff", *quiet, "--exit-code", *files]
+        ).returncode
+        != 0
+    )
 
 
-def check_flathub_descriptor_dependencies(failures: list[str],
-                                          config: Config) -> None:
+def check_flathub_descriptor_dependencies(failures: list[str], config: Config) -> None:
     """Runs update_flathub_descriptor_dependencies.py and checks if it made any
     changes.
     """
-    with stage.Stage("Flathub dependencies",
-                     "Update flathub descriptor dependencies",
-                     failures) as check:
-        flathub_manifest_path = update_flathub_descriptor_dependencies.find_manifest(
-        )
+    with stage.Stage(
+        "Flathub dependencies", "Update flathub descriptor dependencies", failures
+    ) as check:
+        flathub_manifest_path = update_flathub_descriptor_dependencies.find_manifest()
         if not flathub_manifest_path:
             check.ok("No flathub manifest in this repository")
             return
@@ -129,17 +133,16 @@ def check_flathub_descriptor_dependencies(failures: list[str],
             update_flathub_descriptor_dependencies.Config(
                 flathub_manifest_path=flathub_manifest,
                 output_manifest_path=flathub_manifest,
-                download_files_path=os.path.join(dockerfiles_dir(), "qtox",
-                                                 "download"),
+                download_files_path=os.path.join(dockerfiles_dir(), "qtox", "download"),
                 quiet=True,
-                git_tag=config.git_tag or github.head_ref().removeprefix(
-                    f"{git.RELEASE_BRANCH_PREFIX}/"),
-            ))
+                git_tag=config.git_tag
+                or github.head_ref().removeprefix(f"{git.RELEASE_BRANCH_PREFIX}/"),
+            )
+        )
         if has_diff(config, flathub_manifest):
             if config.commit:
                 git.add(flathub_manifest)
-                check.ok(
-                    "The flathub descriptor dependencies have been updated")
+                check.ok("The flathub descriptor dependencies have been updated")
             else:
                 check.fail("The flathub descriptor dependencies have changed")
                 # Reset the changes to the flathub descriptor.
@@ -154,23 +157,22 @@ def check_toxcore_version(failures: list[str]) -> None:
     We get the latest release version of TokTok/c-toxcore from GitHub and
     compare it to the one in the script (which has a line like TOXCORE_VERSION=0.2.20).
     """
-    with stage.Stage("Toxcore version",
-                     "Check if the toxcore version is up-to-date",
-                     failures) as check:
-        download_toxcore_path = os.path.join(dockerfiles_dir(), "qtox",
-                                             "download", "download_toxcore.sh")
+    with stage.Stage(
+        "Toxcore version", "Check if the toxcore version is up-to-date", failures
+    ) as check:
+        download_toxcore_path = os.path.join(
+            dockerfiles_dir(), "qtox", "download", "download_toxcore.sh"
+        )
         with open(download_toxcore_path) as f:
-            found = re.search(r"^TOXCORE_VERSION=(.*)$", f.read(),
-                              re.MULTILINE)
+            found = re.search(r"^TOXCORE_VERSION=(.*)$", f.read(), re.MULTILINE)
             if not found:
-                check.fail(
-                    "Could not find the toxcore version in the download script"
-                )
+                check.fail("Could not find the toxcore version in the download script")
                 return
             toxcore_version = found.group(1)
 
-        latest_toxcore_version = github.api(
-            "/repos/TokTok/c-toxcore/releases/latest")["tag_name"]
+        latest_toxcore_version = github.api("/repos/TokTok/c-toxcore/releases/latest")[
+            "tag_name"
+        ]
         if f"v{toxcore_version}" == latest_toxcore_version:
             check.ok(f"The toxcore version is up-to-date: {toxcore_version}")
         else:
@@ -181,14 +183,15 @@ def check_toxcore_version(failures: list[str]) -> None:
 
 def check_package_versions(failures: list[str], config: Config) -> None:
     """Runs tools/update-versions.sh ${GITHUB_HEAD_REF/release\\/v/} and checks if it made any changes."""
-    with stage.Stage("Package versions",
-                     "README and package versions should be up-to-date",
-                     failures) as check:
+    with stage.Stage(
+        "Package versions", "README and package versions should be up-to-date", failures
+    ) as check:
         if not os.path.isfile("tools/update-versions.sh"):
             check.ok("No version update script found")
             return
         git_tag = config.git_tag or github.head_ref().removeprefix(
-            f"{git.RELEASE_BRANCH_PREFIX}/")
+            f"{git.RELEASE_BRANCH_PREFIX}/"
+        )
         subprocess.check_call(  # nosec
             [
                 "tools/update-versions.sh",
@@ -228,9 +231,9 @@ def check_no_version_changes(failures: list[str]) -> None:
     +  <release version="1.18.0" date="2024-12-29"/>
     """
     with stage.Stage(
-            "No version changes",
-            "No version changes should be made in a non-release PR",
-            failures,
+        "No version changes",
+        "No version changes should be made in a non-release PR",
+        failures,
     ) as check:
         appdata_xml = find_appdata_xml()
         if not appdata_xml:
@@ -248,25 +251,27 @@ def check_no_version_changes(failures: list[str]) -> None:
             cwd=git.root_dir(),
             universal_newlines=True,
         )
-        minus = re.findall(r"^-[^<]+<release version=\"(.*)\" date", diff,
-                           re.MULTILINE)
-        plus = re.findall(r"^\+[^<]+<release version=\"(.*)\" date", diff,
-                          re.MULTILINE)
+        minus = re.findall(r"^-[^<]+<release version=\"(.*)\" date", diff, re.MULTILINE)
+        plus = re.findall(r"^\+[^<]+<release version=\"(.*)\" date", diff, re.MULTILINE)
         if minus and plus:
-            check.fail("Version changes are not allowed"
-                       f" in a non-release PR ({minus[0]} -> {plus[0]})")
+            check.fail(
+                "Version changes are not allowed"
+                f" in a non-release PR ({minus[0]} -> {plus[0]})"
+            )
         elif minus or plus:
             check.fail(
                 "Removal or addition of a version number is not allowed"
-                f" in a non-release PR ({minus[0] if minus else plus[0]})")
+                f" in a non-release PR ({minus[0] if minus else plus[0]})"
+            )
         else:
             check.ok("No version changes were made")
 
 
 def check_changelog(failures: list[str], config: Config) -> None:
     """Check that the changelog is up-to-date."""
-    with stage.Stage("Changelog", "The changelog should be up-to-date",
-                     failures) as check:
+    with stage.Stage(
+        "Changelog", "The changelog should be up-to-date", failures
+    ) as check:
         update_changelog.main()
         if has_diff(config, "CHANGELOG.md"):
             if config.commit:
@@ -309,9 +314,7 @@ def main(config: Config) -> None:
         check_toxcore_version(failures)
         check_package_versions(failures, config)
     else:
-        print(
-            f"This is not a release PR ({git.RELEASE_BRANCH_REGEX.pattern}).\n"
-        )
+        print(f"This is not a release PR ({git.RELEASE_BRANCH_REGEX.pattern}).\n")
         check_no_version_changes(failures)
 
     check_changelog(failures, config)

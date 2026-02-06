@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright © 2025 The TokTok team
+# Copyright © 2025-2026 The TokTok team
 import argparse
 import json
 import re
 import socket
 import subprocess  # nosec
-from dataclasses import asdict
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from functools import cache as memoize
-from typing import Any
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 from lib import git
@@ -98,8 +96,7 @@ def _get_nodes(config: Config) -> list[Node]:
 
 
 @memoize
-def _resolve(host: str, port: int,
-             family: socket.AddressFamily) -> Optional[str]:
+def _resolve(host: str, port: int, family: socket.AddressFamily) -> Optional[str]:
     """Resolve a hostname to an IP address."""
     if _IPV4_REGEX.match(host) or _IPV6_REGEX.match(host):
         return host
@@ -129,10 +126,7 @@ def main(config: Config) -> None:
     _resolve_nodes(nodes)
     with open(config.output, "w") as f:
         json.dump(
-            {
-                "nodes":
-                [asdict(node) for node in nodes if node.ipv4 or node.ipv6]
-            },
+            {"nodes": [asdict(node) for node in nodes if node.ipv4 or node.ipv6]},
             f,
             indent=2,
         )

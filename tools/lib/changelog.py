@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
-# Copyright © 2024-2025 The TokTok team
+# Copyright © 2024-2026 The TokTok team
 import re
 from dataclasses import dataclass
 
@@ -47,26 +47,26 @@ def parse(logfile: str = DEFAULT_LOGFILE) -> dict[str, ReleaseNotes]:
                 in_changelog = True
             elif line.startswith("<a name="):
                 in_release_notes = False
-                messages[version] = ReleaseNotes(version, date, header,
-                                                 notes.strip(),
-                                                 changelog.strip())
+                messages[version] = ReleaseNotes(
+                    version, date, header, notes.strip(), changelog.strip()
+                )
             else:
                 notes += line + "\n"
                 continue
         if in_changelog:
             if line.startswith("<a name="):
                 in_changelog = False
-                messages[version] = ReleaseNotes(version, date, header,
-                                                 notes.strip(),
-                                                 changelog.strip())
+                messages[version] = ReleaseNotes(
+                    version, date, header, notes.strip(), changelog.strip()
+                )
             else:
                 changelog += line + "\n"
                 continue
         if line.startswith("## "):
             if version:
-                messages[version] = ReleaseNotes(version, date, header,
-                                                 notes.strip(),
-                                                 changelog.strip())
+                messages[version] = ReleaseNotes(
+                    version, date, header, notes.strip(), changelog.strip()
+                )
             version = line.split(" ")[1]
             date = line.split("(")[1].split(")")[0]
             header = ""
@@ -78,14 +78,14 @@ def parse(logfile: str = DEFAULT_LOGFILE) -> dict[str, ReleaseNotes]:
             in_release_notes = True
 
     if version:
-        messages[version] = ReleaseNotes(version, date, header, notes.strip(),
-                                         changelog.strip())
+        messages[version] = ReleaseNotes(
+            version, date, header, notes.strip(), changelog.strip()
+        )
 
     return messages
 
 
-def get_release_notes(version: str,
-                      logfile: str = DEFAULT_LOGFILE) -> ReleaseNotes:
+def get_release_notes(version: str, logfile: str = DEFAULT_LOGFILE) -> ReleaseNotes:
     return parse(logfile)[version]
 
 
@@ -93,9 +93,7 @@ def has_release_notes(version: str, logfile: str = DEFAULT_LOGFILE) -> bool:
     return parse(logfile).get(version) is not None
 
 
-def set_release_notes(version: str,
-                      notes: str,
-                      logfile: str = DEFAULT_LOGFILE) -> None:
+def set_release_notes(version: str, notes: str, logfile: str = DEFAULT_LOGFILE) -> None:
     """Set the release notes for a given version in the changelog file.
 
     Release notes are inserted between version header "## <version>" and the
