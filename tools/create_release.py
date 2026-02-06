@@ -149,7 +149,8 @@ class Releaser:
 
         # 1. Preparation
         if self.github.find_pr_for_branch(
-            f"{self.github.actor()}:{BRANCH_PREFIX}/{version}", self.config.main_branch
+            f"{self.git.owner('origin')}:{BRANCH_PREFIX}/{version}",
+            self.config.main_branch,
         ):
             done.add("Preparation")
 
@@ -888,12 +889,14 @@ class Releaser:
                 return
             if self.config.github_actions:
                 s.ok("Asking user to publish the release")
+                release = self.github.release(version)
+                url = release["html_url"]
                 raise self.assign_to_user(
                     s,
                     version,
                     task="Publication",
                     action="publish the release",
-                    instruction=f"All checks passed and assets signed. Please [publish the release](https://github.com/{self.github.repository()}/releases/tag/{version}) manually.",
+                    instruction=f"All checks passed and assets signed. Please [publish the release]({url}) manually.",
                 )
             s.ok("Not implemented yet")
 

@@ -95,6 +95,11 @@ class FakeGitHub(github.GitHub):
         params: dict[str, Any] | None = None,
     ) -> Any:
         if url.endswith("/pulls"):
+            head_user, head_ref = (
+                json["head"].split(":", 1)
+                if ":" in json["head"]
+                else ("toktok-releaser", json["head"])
+            )
             pr = {
                 "title": json["title"],
                 "body": json["body"],
@@ -104,7 +109,11 @@ class FakeGitHub(github.GitHub):
                 "node_id": f"node{len(self._prs)}",
                 "html_url": f"url{len(self._prs)}",
                 "state": "open",
-                "head": {"sha": "sha123", "ref": json["head"]},
+                "head": {
+                    "sha": "sha123",
+                    "ref": head_ref,
+                    "user": {"login": head_user},
+                },
                 "milestone": None,
                 "draft": json.get("draft", False),
                 "merged_at": None,
@@ -123,6 +132,7 @@ class FakeGitHub(github.GitHub):
                 "prerelease": json["prerelease"],
                 "draft": json["draft"],
                 "published_at": None,
+                "html_url": f"https://github.com/TokTok/ci-tools/releases/edit/{json['tag_name']}",
             }
             self._releases.append(release)
             return release
@@ -217,7 +227,8 @@ class FakeGitHub(github.GitHub):
     ) -> github.PullRequest | None:
         for pr_data in self._prs:
             if pr_data["state"] == state or state == "all":
-                if pr_data["head"]["ref"] == head.split(":")[-1]:
+                pr_head = f"{pr_data['head']['user']['login']}:{pr_data['head']['ref']}"
+                if pr_head == head:
                     return github.PullRequest.fromJSON(pr_data)
         return None
 
@@ -312,7 +323,7 @@ class FakeGit(git.Git):
         self._current_branch = name
 
     def owner(self, remote: str) -> str:
-        return "bot"
+        return "human"
 
     def last_commit_message(self, branch: str) -> str:
         return self._log[-1] if self._log else ""
@@ -415,6 +426,7 @@ class TestReleaseE2E(unittest.TestCase):
                 "tag_name": "v1.0.0",
                 "published_at": None,
                 "body": "Existing draft notes",
+                "html_url": "https://github.com/TokTok/ci-tools/releases/edit/v1.0.0",
             }
         )
 
@@ -487,9 +499,14 @@ class TestReleaseE2E(unittest.TestCase):
                 pass
 
             # Verify intermediate dashboard state
+            self.assertIn("[x] Create release branch and PR", gh._issues[1]["body"])
             self.assertIn("**Current Step: Finalize release**", gh._issues[1]["body"])
             self.assertIn(
                 "Action Required:** All checks passed and assets signed",
+                gh._issues[1]["body"],
+            )
+            self.assertIn(
+                "https://github.com/TokTok/ci-tools/releases/edit/v1.0.0",
                 gh._issues[1]["body"],
             )
 
@@ -502,6 +519,41 @@ class TestReleaseE2E(unittest.TestCase):
         self.assertIn("v1.0.0", gt._tags)
         self.assertEqual(gh._issues[1]["state"], "closed")
         self.assertIn("[x] Finalize release", gh._issues[1]["body"])
+
+    def test_mismatched_actor_and_owner(self) -> None:
+        """Verify that the dashboard works when actor and owner are different."""
+        config = self.make_config()
+        gh = FakeGitHub()
+        gh._user = {"login": "releaser-bot"}
+        gh.add_issue(
+            1,
+            "Release tracking issue",
+            "### Release notes\nCool notes\nProduction release",
+        )
+        gh.add_milestone(1, "v1.0.0")
+
+        gt = FakeGit()
+
+        # Simulate owner being different from actor
+        def mock_owner(remote: str) -> str:
+            return "TokTok"
+
+        setattr(gt, "owner", mock_owner)
+
+        releaser = Releaser(config, gt, gh)
+
+        with self.release_mocks(gh, gt):
+            # We only care about the preparation stage for this test
+            releaser.stage_init()
+            version = releaser.stage_version()
+            releaser.stage_branch(version)
+            releaser.stage_pull_request(version)
+            releaser.update_dashboard(version)
+
+            # Check that the checkbox is marked
+            self.assertIn("[x] Create release branch and PR", gh._issues[1]["body"])
+            # Verify the PR head in our fake storage
+            self.assertEqual(gh._prs[0]["head"]["user"]["login"], "TokTok")
 
     def test_invalid_issue_title(self) -> None:
         config = self.make_config()
@@ -528,6 +580,7 @@ class TestReleaseE2E(unittest.TestCase):
                 "published_at": "2026-02-06T00:00:00Z",
                 "prerelease": True,
                 "draft": False,
+                "html_url": "https://github.com/TokTok/ci-tools/releases/edit/v1.0.0-rc.1",
             }
         )
 
@@ -578,7 +631,11 @@ class TestReleaseE2E(unittest.TestCase):
                 "node_id": "node555",
                 "html_url": "url555",
                 "state": "open",
-                "head": {"sha": "sha123", "ref": "release/v1.0.0"},
+                "head": {
+                    "sha": "sha123",
+                    "ref": "release/v1.0.0",
+                    "user": {"login": "human"},
+                },
                 "milestone": {"number": 1},
                 "draft": True,
                 "merged_at": None,
@@ -660,6 +717,7 @@ class TestReleaseE2E(unittest.TestCase):
                 "tag_name": "v1.0.0",
                 "published_at": None,
                 "body": "Existing draft notes",
+                "html_url": "https://github.com/TokTok/ci-tools/releases/edit/v1.0.0",
             }
         )
 
@@ -698,6 +756,7 @@ class TestReleaseE2E(unittest.TestCase):
                 "tag_name": "v1.0.0",
                 "published_at": None,
                 "body": "Existing draft notes",
+                "html_url": "https://github.com/TokTok/ci-tools/releases/edit/v1.0.0",
             }
         )
 

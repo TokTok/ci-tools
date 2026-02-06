@@ -335,6 +335,20 @@ class GitHub:
             return rid
         raise ValueError(f"Release {tag} not found in {self.repository()}")
 
+    def get_release(self, tag: str) -> Any:
+        """Get the full release object for a tag, or None if not found."""
+        rid = self.get_release_id(tag)
+        if rid is None:
+            return None
+        return self.api_uncached(f"/repos/{self.repository()}/releases/{rid}")
+
+    def release(self, tag: str) -> Any:
+        """Get the full release object for a tag."""
+        release = self.get_release(tag)
+        if release is not None:
+            return release
+        raise ValueError(f"Release {tag} not found in {self.repository()}")
+
     def actor(self) -> str:
         """Returns the GitHub username for the current repository."""
         github_actor = os.getenv("GITHUB_ACTOR")
