@@ -5,8 +5,7 @@ import re
 import subprocess  # nosec
 import unittest
 from dataclasses import dataclass
-from functools import cache as memoize
-from typing import Any, Optional
+from typing import Any
 
 from lib import types
 
@@ -20,7 +19,7 @@ class Version:
     major: int
     minor: int
     patch: int
-    rc: Optional[int]
+    rc: int | None
 
     def __str__(self) -> str:
         return f"v{self.major}.{self.minor}.{self.patch}" + (
@@ -55,618 +54,442 @@ def parse_version(version: str) -> Version:
     )
 
 
-class TestParseVersion(unittest.TestCase):
-
-    def test_parse_version(self) -> None:
-        self.assertEqual(parse_version("v1.2.3"), Version(1, 2, 3, None))
-        self.assertEqual(parse_version("v1.2.3-rc.1"), Version(1, 2, 3, 1))
-
-    def test_comparison(self) -> None:
-        self.assertLess(parse_version("v1.2.3"), parse_version("v1.2.4"))
-        self.assertLess(parse_version("v1.2.3"), parse_version("v1.3.0"))
-        self.assertLess(parse_version("v1.2.3"), parse_version("v2.0.0"))
-        self.assertLess(parse_version("v1.2.3-rc.1"), parse_version("v1.2.3-rc.2"))
-        self.assertLess(parse_version("v1.2.3-rc.1"), parse_version("v1.2.3"))
-        self.assertGreater(parse_version("v1.2.3"), parse_version("v1.2.2"))
-        self.assertGreater(parse_version("v1.2.3"), parse_version("v1.2.3-rc.1"))
-        self.assertEqual(parse_version("v1.2.3"), parse_version("v1.2.3"))
-        self.assertEqual(parse_version("v1.2.3-rc.1"), parse_version("v1.2.3-rc.1"))
-        self.assertNotEqual(parse_version("v1.2.3"), parse_version("v1.2.4"))
-
-
-class Stash:
+class Git:
+    """A provider for Git commands."""
 
     def __init__(self) -> None:
-        self.stashed = False
+        self._root_cache: str | None = None
 
-    def __enter__(self) -> None:
-        if diff_exitcode():
-            print("Stashing changes.")
-            self.stashed = True
-            subprocess.check_call(  # nosec
-                [
-                    "git",
-                    "stash",
-                    "--quiet",
-                    "--include-untracked",
-                ]
-            )
+    def _run_output(self, args: list[str]) -> str:
+        return subprocess.check_output(["git"] + args).strip().decode("utf-8")
 
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        if self.stashed:
-            print("Restoring stashed changes.")
-            subprocess.check_call(  # nosec
-                [
-                    "git",
-                    "stash",
-                    "pop",
-                    "--quiet",
-                ]
-            )
+    def _run_call(self, args: list[str]) -> None:
+        subprocess.check_call(["git"] + args)  # nosec
 
+    def _run_status(self, args: list[str]) -> int:
+        return subprocess.run(["git"] + args, check=False).returncode  # nosec
 
-class Checkout:
+    def root(self) -> str:
+        """Get the root directory of the git repository."""
+        if self._root_cache is None:
+            self._root_cache = self._run_output(["rev-parse", "--show-toplevel"])
+        return self._root_cache
 
-    def __init__(self, branch: str) -> None:
-        self.branch = branch
-        self.old_branch = current_branch()
+    def root_dir(self) -> pathlib.Path:
+        """Returns the top level source directory as Path object."""
+        return pathlib.Path(self.root())
 
-    def __enter__(self) -> None:
-        if self.branch != current_branch():
-            print(f"Checking out {self.branch} (from {self.old_branch}).")
-            subprocess.check_call(  # nosec
-                [
-                    "git",
-                    "checkout",
-                    "--quiet",
-                    self.branch,
-                ]
-            )
-
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        if self.old_branch != current_branch():
-            print(f"Moving back to {self.old_branch}.")
-            subprocess.check_call(  # nosec
-                [
-                    "git",
-                    "checkout",
-                    "--quiet",
-                    self.old_branch,
-                ]
-            )
-
-
-class ResetOnExit:
-
-    def __init__(self) -> None:
-        self.branch = current_branch()
-
-    def __enter__(self) -> None:
-        pass
-
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        subprocess.check_call(  # nosec
+    def fetch(self, *remotes: str) -> None:
+        """Fetch tags and branches from a remote."""
+        self._run_call(
             [
-                "git",
-                "reset",
+                "fetch",
                 "--quiet",
-                "--hard",
+                "--tags",
+                "--prune",
+                "--force",
+                "--multiple",
+                *remotes,
             ]
         )
 
-
-@memoize
-def root() -> str:
-    """Get the root directory of the git repository."""
-    return (
-        subprocess.check_output(  # nosec
+    def pull(self, remote: str) -> None:
+        """Pull changes from the current branch and remote."""
+        self._run_call(
             [
-                "git",
-                "rev-parse",
-                "--show-toplevel",
-            ]
-        )
-        .strip()
-        .decode("utf-8")
-    )
-
-
-def root_dir() -> pathlib.Path:
-    """Returns the top level source directory as Path object."""
-    return pathlib.Path(root())
-
-
-def fetch(*remotes: str) -> None:
-    """Fetch tags and branches from a remote.
-
-    Making sure our knowledge of the remote state is up-to-date. Fetches all
-    branches, tags, and prunes stale references. Overwrites local tags if they
-    have been updated on the remote.
-    """
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "fetch",
-            "--quiet",
-            "--tags",
-            "--prune",
-            "--force",
-            "--multiple",
-            *remotes,
-        ]
-    )
-
-
-def pull(remote: str) -> None:
-    """Pull changes from the current branch and remote."""
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "pull",
-            "--rebase",
-            "--quiet",
-            remote,
-            current_branch(),
-        ]
-    )
-
-
-def remote_slug(remote: str) -> types.RepoSlug:
-    """Get the GitHub slug of a remote."""
-    url = (
-        subprocess.check_output(  # nosec
-            [
-                "git",
-                "remote",
-                "get-url",
+                "pull",
+                "--rebase",
+                "--quiet",
                 remote,
+                self.current_branch(),
             ]
         )
-        .strip()
-        .decode("utf-8")
-    )
-    match = re.search(r"[:/]([^/]+)/([^./]+)(?:\.git)?$", url)
-    if not match:
-        raise ValueError(f"Could not parse remote URL: {url}")
-    return types.RepoSlug(match.group(1), match.group(2))
 
+    def remote_slug(self, remote: str) -> types.RepoSlug:
+        """Get the GitHub slug of a remote."""
+        url = self._run_output(["remote", "get-url", remote])
+        match = re.search(r"[:/]([^/]+)/([^./]+)(?:\.git)?$", url)
+        if not match:
+            raise ValueError(f"Could not parse remote URL: {url}")
+        return types.RepoSlug(match.group(1), match.group(2))
 
-def owner(remote: str) -> str:
-    """Get the owner of a remote."""
-    return remote_slug(remote).owner
+    def owner(self, remote: str) -> str:
+        """Get the owner of a remote."""
+        return self.remote_slug(remote).owner
 
+    def remotes(self) -> list[str]:
+        """Return a list of remote names (e.g. origin, upstream)."""
+        return self._run_output(["remote"]).splitlines()
 
-def remotes() -> list[str]:
-    """Return a list of remote names (e.g. origin, upstream)."""
-    return subprocess.check_output(  # nosec
-        ["git", "remote"],
-        universal_newlines=True,
-    ).splitlines()
+    def branch_sha(self, branch: str) -> str:
+        """Get the SHA of a branch."""
+        return self._run_output(["rev-list", "--max-count=1", branch])
 
-
-def branch_sha(branch: str) -> str:
-    """Get the SHA of a branch."""
-    return (
-        subprocess.check_output(  # nosec
-            [
-                "git",
-                "rev-list",
-                "--max-count=1",
-                branch,
-            ]
-        )
-        .strip()
-        .decode("utf-8")
-    )
-
-
-def branches(remote: Optional[str] = None) -> list[str]:
-    """Get a list of branches, optionally from a remote.
-
-    If remote is None, return local branches.
-    """
-    if remote is not None and remote not in remotes():
-        raise ValueError(f"Remote {remote} does not exist.")
-    bs = subprocess.check_output(  # nosec
-        [
-            "git",
+    def branches(self, remote: str | None = None) -> list[str]:
+        """Get a list of branches, optionally from a remote."""
+        if remote is not None and remote not in self.remotes():
+            raise ValueError(f"Remote {remote} does not exist.")
+        args = [
             "branch",
             "--list",
             "--no-column",
             "--format=%(refname:short)",
         ]
-        + ([] if remote is None else ["--remotes"]),
-        universal_newlines=True,
-    ).splitlines()
-    if remote is None:
-        return bs
-    return [b.split("/", 1)[1] for b in bs if b.startswith(f"{remote}/")]
+        if remote is not None:
+            args.append("--remotes")
 
+        bs = self._run_output(args).splitlines()
+        if remote is None:
+            return bs
+        return [b.split("/", 1)[1] for b in bs if b.startswith(f"{remote}/")]
 
-def current_branch() -> str:
-    """Get the current branch name."""
-    return (
-        subprocess.check_output(  # nosec
-            [
-                "git",
-                "rev-parse",
-                "--abbrev-ref",
-                "HEAD",
-            ]
+    def current_branch(self) -> str:
+        """Get the current branch name."""
+        return self._run_output(["rev-parse", "--abbrev-ref", "HEAD"])
+
+    def release_tags(self, with_rc: bool = True) -> list[str]:
+        tags = self._run_output(["tag", "--merged"]).splitlines()
+        return sorted(
+            (
+                tag
+                for tag in tags
+                if re.match(VERSION_REGEX, tag) and (with_rc or "-rc." not in tag)
+            ),
+            reverse=True,
+            key=parse_version,
         )
-        .strip()
-        .decode("utf-8")
-    )
 
+    def release_tag_exists(self, tag: str) -> bool:
+        """Check if a tag exists."""
+        return tag in self.release_tags()
 
-def release_tags(with_rc: bool = True) -> list[str]:
-    tags = subprocess.check_output(["git", "tag", "--merged"])  # nosec
-    return sorted(
-        (
-            tag
-            for tag in tags.decode("utf-8").splitlines()
-            if re.match(VERSION_REGEX, tag) and (with_rc or "-rc." not in tag)
-        ),
-        reverse=True,
-        key=parse_version,
-    )
+    def tag(self, tag: str, message: str, sign: bool) -> None:
+        """Create a signed tag with a message."""
+        args = ["tag"]
+        if sign:
+            args.append("--sign")
+        args.extend(["--annotate", "--message", message, tag])
+        self._run_call(args)
 
+    def release_branches(self) -> list[str]:
+        """Get a list of release branches."""
+        return [b for b in self.branches() if re.match(RELEASE_BRANCH_REGEX, b)]
 
-def release_tag_exists(tag: str) -> bool:
-    """Check if a tag exists."""
-    return tag in release_tags()
+    def diff_exitcode(self, *args: str) -> bool:
+        """Check if there are any changes in the git working directory."""
+        return self._run_status(["diff", "--quiet", "--exit-code", *args]) != 0
 
+    def is_clean(self) -> bool:
+        """Check if the git working directory is clean."""
+        return not self.diff_exitcode() and not self.diff_exitcode("--cached")
 
-def tag(tag: str, message: str, sign: bool) -> None:
-    """Create a signed tag with a message."""
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "tag",
-            *(["--sign"] if sign else []),
-            "--annotate",
-            "--message",
-            message,
-            tag,
-        ]
-    )
+    def changed_files(self) -> list[str]:
+        """Get a list of changed files."""
+        return self._run_output(["diff", "--name-only", "HEAD"]).splitlines()
 
+    def current_tag(self) -> str:
+        """Get the most recent tag."""
+        return self._run_output(["describe", "--tags", "--abbrev=0", "--match", "v*"])
 
-def release_branches() -> list[str]:
-    """Get a list of release branches."""
-    return [b for b in branches() if re.match(RELEASE_BRANCH_REGEX, b)]
-
-
-def diff_exitcode(*args: str) -> bool:
-    """Check if there are any changes in the git working directory."""
-    return (
-        subprocess.run(  # nosec
-            [
-                "git",
-                "diff",
-                "--quiet",
-                "--exit-code",
-                *args,
-            ],
-            check=False,
-        ).returncode
-        != 0
-    )
-
-
-def is_clean() -> bool:
-    """Check if the git working directory is clean.
-
-    No pending or staged changes.
-    """
-    return not diff_exitcode() and not diff_exitcode("--cached")
-
-
-def changed_files() -> list[str]:
-    """Get a list of changed files."""
-    return subprocess.check_output(  # nosec
-        [
-            "git",
-            "diff",
-            "--name-only",
-            "HEAD",
-        ],
-        universal_newlines=True,
-    ).splitlines()
-
-
-def current_tag() -> str:
-    """Get the most recent tag."""
-    return (
-        subprocess.check_output(  # nosec
-            [
-                "git",
-                "describe",
-                "--tags",
-                "--abbrev=0",
-                "--match",
-                "v*",
-            ]
+    def tag_has_signature(self, tag: str) -> bool:
+        """Check if a tag has a signature."""
+        return "-----BEGIN PGP SIGNATURE-----" in self._run_output(
+            ["cat-file", "tag", tag]
         )
-        .decode("utf-8")
-        .strip()
-    )
 
+    def verify_tag(self, tag: str) -> bool:
+        """Verify the signature of a tag."""
+        return self._run_status(["verify-tag", "--verbose", tag]) == 0
 
-def tag_has_signature(tag: str) -> bool:
-    """Check if a tag has a signature."""
-    return b"-----BEGIN PGP SIGNATURE-----" in subprocess.check_output(  # nosec
-        [
-            "git",
-            "cat-file",
-            "tag",
-            tag,
-        ]
-    )
+    def sign_tag(self, tag: str) -> None:
+        """Sign a tag with its original message."""
+        self._run_call(["tag", "--sign", "--force", tag, f"{tag}^{{}}"])
 
+    def push_tag(self, tag: str, remote: str) -> None:
+        """Push a tag to a remote."""
+        self._run_call(["push", "--quiet", "--force", remote, tag])
 
-def verify_tag(tag: str) -> bool:
-    """Verify the signature of a tag."""
-    return (
-        subprocess.run(  # nosec
+    def checkout(self, branch: str) -> None:
+        """Checkout a branch."""
+        self._run_call(["checkout", "--quiet", branch])
+
+    def revert(self, *files: str) -> None:
+        """Checkout files."""
+        branch = self.current_branch()
+        self._run_call(["checkout", "--quiet", branch, "--", *files])
+
+    def add(self, *files: str) -> None:
+        """Add files to the index."""
+        self._run_call(["add", *files])
+
+    def reset(self, branch: str) -> None:
+        """Reset a branch to a specific commit."""
+        self._run_call(["reset", "--quiet", "--hard", branch])
+
+    def rebase(self, onto: str, commits: int = 0) -> bool:
+        """Rebase the current branch onto another branch."""
+        old_sha = self.branch_sha("HEAD")
+        if not commits:
+            self._run_call(["rebase", "--quiet", onto])
+        else:
+            branch = self.current_branch()
+            self._run_call(["rebase", "--quiet", "--onto", onto, f"HEAD~{commits}"])
+            new_sha = self.branch_sha("HEAD")
+            self.checkout(branch)
+            self.reset(new_sha)
+        return old_sha != self.branch_sha("HEAD")
+
+    def create_branch(self, branch: str, base: str) -> None:
+        """Create a branch from a base branch."""
+        self._run_call(["checkout", "--quiet", "-b", branch, base])
+
+    def push(self, remote: str, branch: str, force: bool = False) -> None:
+        """Push the current branch to a remote."""
+        args = ["push", "--quiet"]
+        if force:
+            args.append("--force")
+        args.extend(["--set-upstream", remote, branch])
+        self._run_call(args)
+
+    def list_changed_files(self) -> list[str]:
+        """List all files that have been changed."""
+        return self._run_output(["diff", "--name-only"]).splitlines()
+
+    def log(self, branch: str, count: int = 100) -> list[str]:
+        """Get the last n commit messages."""
+        lines = self._run_output(
             [
-                "git",
-                "verify-tag",
-                "--verbose",
-                tag,
-            ],
-            check=False,
-        ).returncode
-        == 0
-    )
-
-
-def sign_tag(tag: str) -> None:
-    """Sign a tag with its original message."""
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "tag",
-            "--sign",
-            "--force",
-            tag,
-            f"{tag}^{{}}",
-        ]
-    )
-
-
-def push_tag(tag: str, remote: str) -> None:
-    """Push a tag to a remote."""
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "push",
-            "--quiet",
-            "--force",
-            remote,
-            tag,
-        ]
-    )
-
-
-def checkout(branch: str) -> None:
-    """Checkout a branch."""
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "checkout",
-            "--quiet",
-            branch,
-        ]
-    )
-
-
-def revert(*files: str) -> None:
-    """Checkout files."""
-    branch = current_branch()
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "checkout",
-            "--quiet",
-            branch,
-            "--",
-            *files,
-        ]
-    )
-
-
-def add(*files: str) -> None:
-    """Add files to the index."""
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "add",
-            *files,
-        ]
-    )
-
-
-def reset(branch: str) -> None:
-    """Reset a branch to a specific commit."""
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "reset",
-            "--quiet",
-            "--hard",
-            branch,
-        ]
-    )
-
-
-def rebase(onto: str, commits: int = 0) -> bool:
-    """Rebase the current branch onto another branch.
-
-    If commits is not 0, rebase only the last n commits.
-
-    Returns True if a rebase was performed.
-    """
-    old_sha = branch_sha("HEAD")
-    if not commits:
-        subprocess.check_call(  # nosec
-            [
-                "git",
-                "rebase",
-                "--quiet",
-                onto,
-            ]
-        )
-    else:
-        branch = current_branch()
-        subprocess.check_call(  # nosec
-            [
-                "git",
-                "rebase",
-                "--quiet",
-                "--onto",
-                onto,
-                f"HEAD~{commits}",
-            ]
-        )
-        new_sha = branch_sha("HEAD")
-        checkout(branch)
-        reset(new_sha)
-    return old_sha != branch_sha("HEAD")
-
-
-def create_branch(branch: str, base: str) -> None:
-    """Create a branch from a base branch."""
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "checkout",
-            "--quiet",
-            "-b",
-            branch,
-            base,
-        ]
-    )
-
-
-def push(remote: str, branch: str, force: bool = False) -> None:
-    """Push the current branch to a remote."""
-    force_flag = ["--force"] if force else []
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "push",
-            "--quiet",
-            *force_flag,
-            "--set-upstream",
-            remote,
-            branch,
-        ]
-    )
-
-
-def list_changed_files() -> list[str]:
-    """List all files that have been changed."""
-    return subprocess.check_output(  # nosec
-        [
-            "git",
-            "diff",
-            "--name-only",
-        ],
-        universal_newlines=True,
-    ).splitlines()
-
-
-def log(branch: str, count: int = 100) -> list[str]:
-    """Get the last n commit messages."""
-    return [
-        line.split(" ", 1)[1].strip()
-        for line in subprocess.check_output(  # nosec
-            [
-                "git",
                 "log",
                 "--oneline",
                 "--no-decorate",
                 f"--max-count={count}",
                 branch,
-            ],
-            universal_newlines=True,
+            ]
         ).splitlines()
-    ]
+        return [line.split(" ", 1)[1].strip() for line in lines]
+
+    def find_commit_sha(self, message: str) -> str:
+        """Find the commit SHA of a commit message."""
+        return self._run_output(["log", "--format=%H", "--grep", message, "-1"])
+
+    def last_commit_message(self, branch: str) -> str:
+        """Get the last commit message."""
+        return self.log(branch, 1)[0]
+
+    def commit(self, title: str, body: str) -> None:
+        """Commit changes."""
+        args = ["commit", "--quiet"]
+        if self.last_commit_message(self.current_branch()) == title:
+            args.append("--amend")
+        args.extend(["--message", title, "--message", body])
+        self._run_call(args)
+
+    def files_changed(self, commit: str) -> list[str]:
+        """Get a list of files changed in a commit."""
+        return self._run_output(["diff", "--name-only", f"{commit}^"]).splitlines()
+
+    def commit_message(self, commit_sha: str) -> str:
+        """Get the commit message of a commit."""
+        return self._run_output(["show", "--quiet", "--format=%B", commit_sha])
+
+    def is_up_to_date(self, branch: str, remote: str) -> bool:
+        """Check if a branch sha is equal to its remote counterpart."""
+        return branch in self.branches(remote) and self.branch_sha(
+            branch
+        ) == self.branch_sha(f"{remote}/{branch}")
+
+
+DEFAULT_GIT = Git()
+
+
+class Stash:
+    def __init__(self, prov: Git = DEFAULT_GIT) -> None:
+        self.prov = prov
+        self.stashed = False
+
+    def __enter__(self) -> None:
+        if self.prov.diff_exitcode():
+            print("Stashing changes.")
+            self.stashed = True
+            self.prov._run_call(["stash", "--quiet", "--include-untracked"])
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        if self.stashed:
+            print("Restoring stashed changes.")
+            self.prov._run_call(["stash", "pop", "--quiet"])
+
+
+class Checkout:
+    def __init__(self, branch: str, prov: Git = DEFAULT_GIT) -> None:
+        self.branch = branch
+        self.prov = prov
+        self.old_branch = prov.current_branch()
+
+    def __enter__(self) -> None:
+        if self.branch != self.prov.current_branch():
+            print(f"Checking out {self.branch} (from {self.old_branch}).")
+            self.prov.checkout(self.branch)
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        if self.old_branch != self.prov.current_branch():
+            print(f"Moving back to {self.old_branch}.")
+            self.prov.checkout(self.old_branch)
+
+
+class ResetOnExit:
+    def __init__(self, prov: Git = DEFAULT_GIT) -> None:
+        self.prov = prov
+
+    def __enter__(self) -> None:
+        pass
+
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        self.prov.reset(self.prov.current_branch())
+
+
+def root() -> str:
+    return DEFAULT_GIT.root()
+
+
+def root_dir() -> pathlib.Path:
+    return DEFAULT_GIT.root_dir()
+
+
+def fetch(*remotes: str) -> None:
+    DEFAULT_GIT.fetch(*remotes)
+
+
+def pull(remote: str) -> None:
+    DEFAULT_GIT.pull(remote)
+
+
+def remote_slug(remote: str) -> types.RepoSlug:
+    return DEFAULT_GIT.remote_slug(remote)
+
+
+def owner(remote: str) -> str:
+    return DEFAULT_GIT.owner(remote)
+
+
+def remotes() -> list[str]:
+    return DEFAULT_GIT.remotes()
+
+
+def branch_sha(branch: str) -> str:
+    return DEFAULT_GIT.branch_sha(branch)
+
+
+def branches(remote: str | None = None) -> list[str]:
+    return DEFAULT_GIT.branches(remote)
+
+
+def current_branch() -> str:
+    return DEFAULT_GIT.current_branch()
+
+
+def release_tags(with_rc: bool = True) -> list[str]:
+    return DEFAULT_GIT.release_tags(with_rc)
+
+
+def release_tag_exists(tag: str) -> bool:
+    return DEFAULT_GIT.release_tag_exists(tag)
+
+
+def tag(tag: str, message: str, sign: bool) -> None:
+    DEFAULT_GIT.tag(tag, message, sign)
+
+
+def release_branches() -> list[str]:
+    return DEFAULT_GIT.release_branches()
+
+
+def diff_exitcode(*args: str) -> bool:
+    return DEFAULT_GIT.diff_exitcode(*args)
+
+
+def is_clean() -> bool:
+    return DEFAULT_GIT.is_clean()
+
+
+def changed_files() -> list[str]:
+    return DEFAULT_GIT.changed_files()
+
+
+def current_tag() -> str:
+    return DEFAULT_GIT.current_tag()
+
+
+def tag_has_signature(tag: str) -> bool:
+    return DEFAULT_GIT.tag_has_signature(tag)
+
+
+def verify_tag(tag: str) -> bool:
+    return DEFAULT_GIT.verify_tag(tag)
+
+
+def sign_tag(tag: str) -> None:
+    DEFAULT_GIT.sign_tag(tag)
+
+
+def push_tag(tag: str, remote: str) -> None:
+    DEFAULT_GIT.push_tag(tag, remote)
+
+
+def checkout(branch: str) -> None:
+    DEFAULT_GIT.checkout(branch)
+
+
+def revert(*files: str) -> None:
+    DEFAULT_GIT.revert(*files)
+
+
+def add(*files: str) -> None:
+    DEFAULT_GIT.add(*files)
+
+
+def reset(branch: str) -> None:
+    DEFAULT_GIT.reset(branch)
+
+
+def rebase(onto: str, commits: int = 0) -> bool:
+    return DEFAULT_GIT.rebase(onto, commits)
+
+
+def create_branch(branch: str, base: str) -> None:
+    DEFAULT_GIT.create_branch(branch, base)
+
+
+def push(remote: str, branch: str, force: bool = False) -> None:
+    DEFAULT_GIT.push(remote, branch, force)
+
+
+def list_changed_files() -> list[str]:
+    return DEFAULT_GIT.list_changed_files()
+
+
+def log(branch: str, count: int = 100) -> list[str]:
+    return DEFAULT_GIT.log(branch, count)
 
 
 def find_commit_sha(message: str) -> str:
-    """Find the commit SHA of a commit message."""
-    return (
-        subprocess.check_output(  # nosec
-            [
-                "git",
-                "log",
-                "--format=%H",
-                "--grep",
-                message,
-                "-1",
-            ]
-        )
-        .strip()
-        .decode("utf-8")
-    )
+    return DEFAULT_GIT.find_commit_sha(message)
 
 
 def last_commit_message(branch: str) -> str:
-    """Get the last commit message."""
-    return log(branch, 1)[0]
+    return DEFAULT_GIT.last_commit_message(branch)
 
 
 def commit(title: str, body: str) -> None:
-    """Commit changes.
-
-    If the commit message is the same as the last commit, amend it.
-    """
-    amend = ["--amend"] if last_commit_message(current_branch()) == title else []
-    subprocess.check_call(  # nosec
-        [
-            "git",
-            "commit",
-            "--quiet",
-            *amend,
-            "--message",
-            title,
-            "--message",
-            body,
-        ]
-    )
+    DEFAULT_GIT.commit(title, body)
 
 
 def files_changed(commit: str) -> list[str]:
-    """Get a list of files changed in a commit."""
-    return subprocess.check_output(  # nosec
-        [
-            "git",
-            "diff",
-            "--name-only",
-            f"{commit}^",
-        ],
-        universal_newlines=True,
-    ).splitlines()
+    return DEFAULT_GIT.files_changed(commit)
 
 
 def commit_message(commit_sha: str) -> str:
-    """Get the commit message of a commit."""
-    return subprocess.check_output(  # nosec
-        [
-            "git",
-            "show",
-            "--quiet",
-            "--format=%B",
-            commit_sha,
-        ],
-        universal_newlines=True,
-    )
+    return DEFAULT_GIT.commit_message(commit_sha)
 
 
 def is_up_to_date(branch: str, remote: str) -> bool:
-    """Check if a branch sha is equal to its remote counterpart."""
-    return branch in branches(remote) and branch_sha(branch) == branch_sha(
-        f"{remote}/{branch}"
-    )
+    return DEFAULT_GIT.is_up_to_date(branch, remote)

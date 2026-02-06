@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2024-2026 The TokTok team
+from __future__ import annotations
+
 import time
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 sleep = time.sleep
 
@@ -95,8 +97,8 @@ class Stage:
         self,
         name: str,
         description: str,
-        failures: Optional[list[str]] = None,
-        parent: Optional["Stage"] = None,
+        failures: list[str] | None = None,
+        parent: Stage | None = None,
     ) -> None:
         """Initializes a new stage. Doesn't enter it yet (use `with` for that).
 

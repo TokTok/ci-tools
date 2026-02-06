@@ -34,6 +34,18 @@ py_test(
 )
 
 py_test(
+    name = "github_parsing_test",
+    srcs = ["tools/lib/github_parsing_test.py"],
+    deps = [":lib"],
+)
+
+py_test(
+    name = "git_test",
+    srcs = ["tools/lib/git_test.py"],
+    deps = [":lib"],
+)
+
+py_test(
     name = "create_release_test",
     srcs = ["tools/create_release_test.py"],
     deps = [":create_release_lib"],
@@ -48,6 +60,78 @@ py_test(
 py_test(
     name = "update_changelog_test",
     srcs = ["tools/update_changelog_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "artifact_sha256_test",
+    srcs = ["tools/artifact_sha256_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "create_tarballs_test",
+    srcs = ["tools/create_tarballs_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "sign_tag_test",
+    srcs = ["tools/sign_tag_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "changelog_test",
+    srcs = ["tools/lib/changelog_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "update_changelog_logic_test",
+    srcs = ["tools/update_changelog_logic_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "update_changelog_log_parser_test",
+    srcs = ["tools/update_changelog_log_parser_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "update_changelog_format_test",
+    srcs = ["tools/update_changelog_format_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "update_nodes_test",
+    srcs = ["tools/update_nodes_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "translate_test",
+    srcs = ["tools/translate_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "artifact_rename_logic_test",
+    srcs = ["tools/artifact_rename_logic_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "validate_pr_test",
+    srcs = ["tools/validate_pr_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "update_flathub_descriptor_dependencies_test",
+    srcs = ["tools/update_flathub_descriptor_dependencies_test.py"],
     deps = [":create_release_lib"],
 )
 

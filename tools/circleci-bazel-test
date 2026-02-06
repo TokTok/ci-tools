@@ -48,25 +48,28 @@ for PATCHELF in /nix/store/*-patchelf-*/bin/patchelf; do
   fi
 done
 
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+
 pushd /src/workspace
-curl -L https://github.com/buchgr/bazel-remote/releases/download/v2.5.0/bazel-remote-2.5.0-linux-x86_64 -o /tmp/bazel-remote
+curl -L https://github.com/buchgr/bazel-remote/releases/download/v2.5.0/bazel-remote-2.5.0-linux-x86_64 -o "$TMPDIR/bazel-remote"
 # TODO(iphydf): Use bazel once the image is updated.
-# bazel run @patchelf//:patchelf -- --set-interpreter /nix/store/*-glibc-*/lib64/ld-linux-x86-64.so.2 /tmp/bazel-remote
-"$PATCHELF" --set-interpreter /nix/store/*-glibc-*/lib64/ld-linux-x86-64.so.2 /tmp/bazel-remote
-chmod +x /tmp/bazel-remote
+# bazel run @patchelf//:patchelf -- --set-interpreter /nix/store/*-glibc-*/lib64/ld-linux-x86-64.so.2 "$TMPDIR/bazel-remote"
+"$PATCHELF" --set-interpreter /nix/store/*-glibc-*/lib64/ld-linux-x86-64.so.2 "$TMPDIR/bazel-remote"
+chmod +x "$TMPDIR/bazel-remote"
 popd
 
 tar -C .. -xf <(curl -L "https://github.com/TokTok/toktok-stack/releases/download/nightly/$FLAVOUR.tar")
 # Test whether it starts up at all.
-/tmp/bazel-remote --dir ../bazel-cache --max_size 1 --grpc_address=unix:///tmp/grpc.sock --idle_timeout 1s
+"$TMPDIR/bazel-remote" --dir ../bazel-cache --max_size 1 --grpc_address="unix://$TMPDIR/grpc.sock" --idle_timeout 1s
 # Then actually start it.
-/tmp/bazel-remote --dir ../bazel-cache --max_size 1 --grpc_address=unix:///tmp/grpc.sock >/tmp/bazel-remote.log &
+"$TMPDIR/bazel-remote" --dir ../bazel-cache --max_size 1 --grpc_address="unix://$TMPDIR/grpc.sock" >"$TMPDIR/bazel-remote.log" &
 
 run_test() {
   pushd /src/workspace
   bazel test \
     --remote_cache=grpc://localhost:9092 \
-    --remote_proxy=unix:///tmp/grpc.sock \
+    --remote_proxy="unix://$TMPDIR/grpc.sock" \
     --config="$FLAVOUR" \
     "${BAZEL_ARGS[@]}"
   popd

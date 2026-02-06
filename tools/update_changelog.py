@@ -9,7 +9,7 @@ import subprocess  # nosec
 import tomllib
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 
 from lib import changelog, git
 
@@ -56,7 +56,7 @@ class LogEntry:
     author: str
     date: str
     category: str
-    module: Optional[str]
+    module: str | None
     message: str
     closes: tuple[str, ...]
 
@@ -73,7 +73,7 @@ class Config:
     production: bool
     repository: str
     forked_from: list[ForkInfo]
-    ignore_before: Optional[str]
+    ignore_before: str | None
 
 
 def read_clog_toml() -> dict[str, Any]:
@@ -137,8 +137,8 @@ def parse_args() -> Config:
 
 
 def git_log(prev_tag: str, cur_tag: str) -> list[str]:
-    log = subprocess.check_output(
-        [  # nosec
+    log = subprocess.check_output(  # nosec
+        [
             "git",
             "log",
             f"{prev_tag}..{cur_tag}",
@@ -290,10 +290,10 @@ def group_by_message(entries: list[LogEntry]) -> dict[str, list[LogEntry]]:
 
 
 def preferred_case(
-    modules: Iterable[Optional[str]],
-) -> dict[Optional[str], Optional[str]]:
+    modules: Iterable[str | None],
+) -> dict[str | None, str | None]:
     """Preferred case for module names is the one that has the most uppercase letters."""
-    module_map: dict[Optional[str], Optional[str]] = {None: None}
+    module_map: dict[str | None, str | None] = {None: None}
     for module in modules:
         lower = module.lower() if module else None
         if lower not in module_map:
@@ -316,8 +316,8 @@ def preferred_case(
 
 def group_by_module(
     entries: list[LogEntry],
-) -> dict[Optional[str], dict[str, list[LogEntry]]]:
-    by_module: dict[Optional[str], list[LogEntry]] = {}
+) -> dict[str | None, dict[str, list[LogEntry]]]:
+    by_module: dict[str | None, list[LogEntry]] = {}
     case = preferred_case(entry.module for entry in entries)
     for entry in entries:
         module = case[entry.module.lower() if entry.module else None]
@@ -379,7 +379,7 @@ def format_entry(entries: list[LogEntry]) -> str:
 
 def format_changelog(
     tag: tuple[str, str],
-    groups: dict[str, dict[Optional[str], dict[str, list[LogEntry]]]],
+    groups: dict[str, dict[str | None, dict[str, list[LogEntry]]]],
     old_changelog: dict[str, changelog.ReleaseNotes],
 ) -> str:
     """
@@ -441,7 +441,7 @@ def generate_changelog(
     parser: LogParser,
     cur_tag: tuple[str, str],
     prev_tag: tuple[str, str],
-) -> Optional[str]:
+) -> str | None:
     log = git_log(prev_tag[0], cur_tag[0])
     if not any(log):
         log = []
@@ -452,7 +452,7 @@ def generate_changelog(
     return format_changelog(cur_tag, groups, old_changelog)
 
 
-def filter_str(strings: Iterable[Optional[str]]) -> Iterable[str]:
+def filter_str(strings: Iterable[str | None]) -> Iterable[str]:
     return (s for s in strings if s)
 
 
@@ -466,7 +466,7 @@ def current_release_branch() -> list[tuple[str, str]]:
     return []
 
 
-def main(config: Optional[Config] = None) -> None:
+def main(config: Config | None = None) -> None:
     if not config:
         config = parse_config(read_clog_toml())
     tags = current_release_branch() + [

@@ -10,7 +10,7 @@ import subprocess  # nosec
 import tempfile
 import unittest
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Any
 
 from lib import git
 
@@ -28,7 +28,7 @@ class Config:
     flathub_manifest_path: str
     output_manifest_path: str
     download_files_path: str
-    git_tag: Optional[str]
+    git_tag: str | None
     quiet: bool
 
 
@@ -80,6 +80,14 @@ download_verify_extract_tarball() {
 """
 
 
+def extract_version_and_hash(output: str) -> tuple[str, str]:
+    """Extract the version and hash from the bash script output."""
+    matches = re.match(r"URL: (.*)\nHASH: (.*)", output, re.MULTILINE)
+    if matches is None:
+        raise ValueError("Failed to extract version and hash from download script")
+    return matches.group(1), matches.group(2)
+
+
 def find_version(download_script_path: pathlib.Path) -> tuple[str, str]:
     """
     Find the version and hash specified for a given dependency by parsing its
@@ -97,37 +105,7 @@ def find_version(download_script_path: pathlib.Path) -> tuple[str, str]:
         ["bash", "-c", script_content],
     ).decode()
 
-    # Extract the version and hash from the output
-    matches = re.match(r"URL: (.*)\nHASH: (.*)", version_output, re.MULTILINE)
-    if matches is None:
-        raise ValueError("Failed to extract version and hash from download script")
-
-    return matches.group(1), matches.group(2)
-
-
-class FindVersionTest(unittest.TestCase):
-
-    def test_version_parsing(self) -> None:
-        # Create a dummy download script and check that we can extract the version from it
-        with tempfile.TemporaryDirectory() as d:
-            sample_download_script = """
-            #!/bin/bash
-
-            source "$(dirname "$0")"/common.sh
-
-            TEST_VERSION=1.2.3
-            TEST_HASH=:)
-
-            download_verify_extract_tarball \
-                "https://test_site.com/$TEST_VERSION" \
-                "$TEST_HASH"
-            """
-
-            sample_download_script_path = pathlib.Path(d) / "/test_script.sh"
-            with open(sample_download_script_path, "w") as f:
-                f.write(sample_download_script)
-
-            self.assertEqual(find_version(sample_download_script_path), ("1.2.3", ":)"))
+    return extract_version_and_hash(version_output)
 
 
 def load_flathub_manifest(flathub_manifest_path: str) -> Any:
@@ -147,16 +125,6 @@ def commit_from_tag(url: str, tag: str) -> str:
         .split(b"\t")[0]
         .decode()
     )
-
-
-class CommitFromTagTest(unittest.TestCase):
-
-    def test_commit_from_tag(self) -> None:
-        # Must be run in the qTox repository.
-        self.assertEqual(
-            commit_from_tag(str(git.root_dir()), "v1.17.3"),
-            "c0e9a3b79609681e5b9f6bbf8f9a36cb1993dc5f",
-        )
 
 
 def update_archive_source(
@@ -179,7 +147,7 @@ def update_git_source(module: dict[str, Any], tag: str) -> None:
         )
 
 
-def find_manifest() -> Optional[pathlib.Path]:
+def find_manifest() -> pathlib.Path | None:
     for path in (git.root_dir() / "platform" / "flatpak").rglob("*.json"):
         return path
     return None
@@ -187,6 +155,15 @@ def find_manifest() -> Optional[pathlib.Path]:
 
 def _normalize(name: str) -> str:
     return name.lower().replace("-", "").replace("_", "")
+
+
+def map_module_name(module_name: str) -> str:
+    """Map a Flathub module name to our internal download script filename."""
+    download_file_map = {
+        "libsodium": "sodium",
+        "c-toxcore": "toxcore",
+    }
+    return download_file_map.get(module_name, module_name)
 
 
 def main(config: Config) -> None:
@@ -211,17 +188,13 @@ def main(config: Config) -> None:
     print("Using version", self_version, "for", self_name)
 
     download_files_dir = pathlib.Path(config.download_files_path)
-    download_file_map = {
-        "libsodium": "sodium",
-        "c-toxcore": "toxcore",
-    }
 
     for module in flathub_manifest["modules"]:
         module_name = str(module["name"])
         if _normalize(module_name) == self_name:
             update_git_source(module, self_version)
         else:
-            filename = download_file_map.get(module_name, module_name)
+            filename = map_module_name(module_name)
             update_archive_source(
                 module, find_version(download_files_dir / f"download_{filename}.sh")
             )

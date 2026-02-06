@@ -8,7 +8,7 @@ import socket
 import subprocess  # nosec
 from dataclasses import asdict, dataclass
 from functools import cache as memoize
-from typing import Any, Optional
+from typing import Any
 
 import requests
 from lib import git
@@ -60,8 +60,8 @@ def parse_args() -> Config:
 
 @dataclass
 class Node:
-    ipv4: Optional[str]
-    ipv6: Optional[str]
+    ipv4: str | None
+    ipv6: str | None
     port: int
     tcp_ports: list[int]
     public_key: str
@@ -96,7 +96,7 @@ def _get_nodes(config: Config) -> list[Node]:
 
 
 @memoize
-def _resolve(host: str, port: int, family: socket.AddressFamily) -> Optional[str]:
+def _resolve(host: str, port: int, family: socket.AddressFamily) -> str | None:
     """Resolve a hostname to an IP address."""
     if _IPV4_REGEX.match(host) or _IPV6_REGEX.match(host):
         return host

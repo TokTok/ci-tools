@@ -6,8 +6,7 @@ import re
 import urllib.parse
 from dataclasses import dataclass
 from enum import Enum
-from functools import cache as memoize
-from typing import IO, Any, Optional
+from typing import IO, Any
 
 import requests
 from lib import git, types
@@ -17,213 +16,6 @@ class AuthLevel(Enum):
     OPTIONAL = 0
     GITHUB = 1
     RELEASER = 2
-
-
-def _process_error(response: requests.Response) -> None:
-    try:
-        response.raise_for_status()
-    except requests.exceptions.HTTPError as e:
-        print(response.json())
-        raise e
-
-
-@memoize
-def _github_token() -> Optional[str]:
-    token = os.getenv("GITHUB_TOKEN")
-    if token:
-        print("Authorization with GITHUB_TOKEN")
-    else:
-        print("Unauthorized (low rate limit applies)")
-        print("Set GITHUB_TOKEN to increase the rate limit")
-    return token
-
-
-@memoize
-def _releaser_token() -> Optional[str]:
-    token = os.getenv("TOKEN_RELEASES")
-    if token:
-        print("Authorization with TOKEN_RELEASES")
-    return token
-
-
-def _token(auth: AuthLevel) -> Optional[str]:
-    if auth == AuthLevel.RELEASER:
-        return _releaser_token()
-    return _github_token()
-
-
-def _auth_headers(auth: AuthLevel) -> dict[str, str]:
-    """Get the authentication headers for GitHub.
-
-    If the GITHUB_TOKEN environment variable is not set, this function will
-    raise an error if required is True, or return an empty dictionary if
-    required is False.
-    """
-    token = _token(auth)
-    if not token:
-        if auth != AuthLevel.OPTIONAL:
-            raise ValueError("GITHUB_TOKEN is needed")
-        else:
-            return {}
-    return {"Authorization": f"Token {token}"}
-
-
-api_requests: list[str] = []
-
-
-def api_url() -> str:
-    return os.getenv("GITHUB_API_URL") or "https://api.github.com"
-
-
-def api_uncached(
-    url: str,
-    auth: AuthLevel = AuthLevel.OPTIONAL,
-    params: tuple[tuple[str, str | int], ...] = tuple(),
-) -> Any:
-    """Call the GitHub API with the given URL (GET only).
-
-    Not cached, use the api() function to cache calls.
-    """
-    api_requests.append(f"GET {api_url()}{url}")
-    response = requests.get(
-        f"{api_url()}{url}",
-        headers=_auth_headers(auth=auth),
-        params=dict(params),
-    )
-    _process_error(response)
-    return response.json()
-
-
-@memoize
-def api(
-    url: str,
-    auth: AuthLevel = AuthLevel.OPTIONAL,
-    params: tuple[tuple[str, str | int], ...] = tuple(),
-) -> Any:
-    """Cache-calls the GitHub API with the given URL (GET only).
-
-    Authorization is done with the GITHUB_TOKEN environment variable if it is set.
-
-    Args:
-        url: The URL to call, starting with a slash.
-        auth: Whether authorization is required (will raise an exception if no token is available).
-        params: A list of key-value pairs to pass as query parameters.
-    """
-    return api_uncached(url, auth, params)
-
-
-def clear_cache() -> None:
-    """Clear the cache of API calls."""
-    api.cache_clear()
-
-
-def username() -> Optional[str]:
-    """Get the GitHub username for the current authenticated user."""
-    if not _github_token():
-        return None
-    return str(api("/user", auth=AuthLevel.GITHUB)["login"])
-
-
-def release_id(tag: str) -> int:
-    """Get the GitHub release ID number for a tag.
-
-    Also works for draft releases. We use tag_name instead of tag because
-    draft releases are untagged.
-    """
-    for release in api(f"/repos/{repository()}/releases"):
-        if release["tag_name"] == tag:
-            return int(release["id"])
-    raise ValueError(f"Release {tag} not found in {repository()}")
-
-
-def head_ref() -> str:
-    """Calls git rev-parse --abbrev-ref HEAD to get the current branch name."""
-    return os.getenv("GITHUB_HEAD_REF") or git.current_branch()
-
-
-def actor() -> str:
-    """Returns the GitHub username for the current repository."""
-    github_actor = os.getenv("GITHUB_ACTOR")
-    if github_actor:
-        return github_actor
-    u = username()
-    if u:
-        return u
-    remotes = git.remotes()
-    for remote in ("origin", "upstream"):
-        if remote in remotes:
-            try:
-                slug = git.remote_slug(remote)
-                return slug.owner
-            except ValueError:
-                continue
-    raise ValueError("Could not determine GitHub actor")
-
-
-def repository() -> str:
-    github_repository = os.getenv("GITHUB_REPOSITORY")
-    if github_repository:
-        return github_repository
-    remotes = git.remotes()
-    for remote in ("upstream", "origin"):
-        if remote in remotes:
-            try:
-                slug = git.remote_slug(remote)
-                return str(slug)
-            except ValueError:
-                continue
-    raise ValueError(
-        "Could not determine repository from GITHUB_REPOSITORY or git remotes (upstream, origin)"
-    )
-
-
-def repository_name() -> str:
-    try:
-        return repository().split("/")[-1]
-    except ValueError:
-        return os.path.basename(git.root())
-
-
-def pr_number() -> int:
-    """Calls the GitHub API to get the PR number for the current branch.
-
-    Requires the GITHUB_API_URL and GITHUB_REF environment variables to be set.
-    """
-    return int(
-        api(
-            f"/repos/{repository()}/pulls",
-            params=(("head", f"{actor()}:{head_ref()}"),),
-        )[0]["number"]
-    )
-
-
-def ref_name() -> str:
-    return os.getenv("GITHUB_REF_NAME") or f"{pr_number()}/merge"
-
-
-def pr() -> Any:
-    """Calls the GitHub API to get the current PR object."""
-    return api(f"/repos/{repository()}/pulls/{ref_name().split('/')[0]}")
-
-
-def pr_branch() -> str:
-    """Calls the GitHub API to get the branch name for the current PR."""
-    return str(pr()["head"]["ref"])
-
-
-def base_ref() -> str:
-    """Calls the GitHub API to get the base branch for the current PR."""
-    return os.getenv("GITHUB_BASE_REF") or str(pr()["base"]["ref"])
-
-
-def base_branch() -> str:
-    """Get the base ref with its remote path."""
-    remotes = git.remotes()
-    if "upstream" in remotes:
-        return f"upstream/{base_ref()}"
-    elif "origin" in remotes:
-        return f"origin/{base_ref()}"
-    raise ValueError("No upstream or origin remotes found")
 
 
 @dataclass
@@ -241,51 +33,6 @@ class Milestone:
         )
 
 
-def milestones() -> dict[str, Milestone]:
-    """Get the names and IDs of all milestones in the repository."""
-    return {
-        m["title"]: Milestone.fromJSON(m)
-        for m in api(f"/repos/{repository()}/milestones")
-    }
-
-
-def milestone(title: str) -> Milestone:
-    """Get the milestone with the given title."""
-    return milestones()[title]
-
-
-def next_milestone() -> Milestone:
-    """Get the next release number (based on the smallest open milestone).
-
-    Milestones are formatted like v1.18.0 or v1.18.x (ignored). The next
-    release number is the smallest version number in the milestones list.
-    """
-    return min(
-        (m for m in milestones().values() if re.match(r"v\d+\.\d+\.\d+$", m.title)),
-        key=lambda m: tuple(map(int, m.title[1:].split("."))),
-    )
-
-
-def assign_milestone(issue_id: int, milestone: int) -> None:
-    """Assign the given milestone to the given issue."""
-    response = requests.patch(
-        f"{api_url()}/repos/{repository()}/issues/{issue_id}",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={"milestone": milestone},
-    )
-    _process_error(response)
-
-
-def close_milestone(number: int) -> None:
-    """Close the milestone with the given number."""
-    response = requests.patch(
-        f"{api_url()}/repos/{repository()}/milestones/{number}",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={"state": "closed"},
-    )
-    _process_error(response)
-
-
 @dataclass
 class Issue:
     title: str
@@ -295,7 +42,7 @@ class Issue:
     number: int
     html_url: str
     state: str
-    milestone: Optional[int]
+    milestone: int | None
 
     @staticmethod
     def fromJSON(issue: dict[str, Any]) -> "Issue":
@@ -311,87 +58,6 @@ class Issue:
         )
 
 
-def open_milestone_issues(milestone: int) -> list[Issue]:
-    """Get all the open issues for a given milestone."""
-    return [
-        Issue.fromJSON(i)
-        for i in api(
-            f"/repos/{repository()}/issues",
-            params=(
-                ("milestone", milestone),
-                ("state", "open"),
-            ),
-        )
-    ]
-
-
-def get_issue(issue_number: int) -> Issue:
-    """Get the issue with the given number."""
-    return Issue.fromJSON(api(f"/repos/{repository()}/issues/{issue_number}"))
-
-
-def rename_issue(issue_number: int, title: str) -> None:
-    """Rename the issue with the given number."""
-    response = requests.patch(
-        f"{api_url()}/repos/{repository()}/issues/{issue_number}",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={"title": title},
-    )
-    _process_error(response)
-
-
-def close_issue(issue_number: int) -> None:
-    """Close the issue with the given number."""
-    response = requests.patch(
-        f"{api_url()}/repos/{repository()}/issues/{issue_number}",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={"state": "closed"},
-    )
-    _process_error(response)
-
-
-def latest_release() -> str:
-    """Get the name of the current release in the repository.
-
-    Includes prereleases.
-    """
-    return str(api(f"/repos/{repository()}/releases/latest")["tag_name"])
-
-
-def prereleases(version: str) -> list[str]:
-    """Get the names of all prereleases for a given version in the repository."""
-    return [
-        r["tag_name"]
-        for r in api(f"/repos/{repository()}/releases")
-        if f"{version}-rc." in r["tag_name"] and r["prerelease"] and not r["draft"]
-    ]
-
-
-def release_candidates(version: str) -> list[int]:
-    """Get the RC numbers (the number after "-rc.") for prereleases of a given version."""
-    return [int(i) for r in prereleases(version) for i in re.findall(r"-rc\.(\d+)$", r)]
-
-
-def issue_assign(issue_id: int, assignees: list[str]) -> None:
-    """Assign the given issue to the given list of users."""
-    response = requests.post(
-        f"{api_url()}/repos/{repository()}/issues/{issue_id}/assignees",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={"assignees": assignees},
-    )
-    _process_error(response)
-
-
-def issue_unassign(issue_id: int, assignees: list[str]) -> None:
-    """Unassign the given issue from the given list of users."""
-    response = requests.delete(
-        f"{api_url()}/repos/{repository()}/issues/{issue_id}/assignees",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={"assignees": assignees},
-    )
-    _process_error(response)
-
-
 @dataclass
 class PullRequest:
     title: str
@@ -401,7 +67,7 @@ class PullRequest:
     html_url: str
     state: str
     head_sha: str
-    milestone: Optional[int]
+    milestone: int | None
     draft: bool
     merged: bool
 
@@ -421,88 +87,6 @@ class PullRequest:
         )
 
 
-def create_pr(
-    title: str, body: str, head: str, base: str, milestone: int
-) -> PullRequest:
-    """Create a pull request with the given title and body.
-
-    Returns the URL of the created PR.
-    """
-    response = requests.post(
-        f"{api_url()}/repos/{repository()}/pulls",
-        headers=_auth_headers(AuthLevel.RELEASER),
-        json={
-            "title": title,
-            "body": body,
-            "head": head,
-            "base": base,
-            "draft": True,
-        },
-    )
-    _process_error(response)
-    pr = PullRequest.fromJSON(response.json())
-    if milestone:
-        change_issue(pr.number, {"milestone": milestone})
-    return pr
-
-
-def find_pr(head_sha: str, base: str) -> Optional[PullRequest]:
-    """Find a PR with the given title, head.sha, and base."""
-    # The HEAD sha may be updated, so we can't use cached API calls.
-    response = api_uncached(
-        f"/repos/{repository()}/pulls",
-        params=(
-            ("state", "all"),
-            ("base", base),
-            ("per_page", 100),
-        ),
-    )
-    for pr in response:
-        if pr["head"]["sha"] == head_sha:
-            return PullRequest.fromJSON(pr)
-    return None
-
-
-def find_pr_for_branch(
-    head: str, base: str, state: str = "all"
-) -> Optional[PullRequest]:
-    """Find a PR with the given head (actor:branch) and base."""
-    # The branch may be updated, so we can't use cached API calls.
-    response = api_uncached(
-        f"/repos/{repository()}/pulls",
-        params=(
-            ("state", state),
-            ("base", base),
-            ("head", head),
-            ("per_page", 100),
-        ),
-    )
-    return PullRequest.fromJSON(response[0]) if response else None
-
-
-def change_pr(number: int, changes: dict[str, str | int]) -> None:
-    """Modify a PR with the given number (e.g. reopen by changing "state")."""
-    response = requests.patch(
-        f"{api_url()}/repos/{repository()}/pulls/{number}",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json=changes,
-    )
-    _process_error(response)
-
-
-def change_issue(number: int, changes: dict[str, str | int]) -> None:
-    """Modify an issue with the given number (e.g. close by changing "state").
-
-    Also used to set milestones on pull requests.
-    """
-    response = requests.patch(
-        f"{api_url()}/repos/{repository()}/issues/{number}",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json=changes,
-    )
-    _process_error(response)
-
-
 @dataclass
 class CheckRun:
     id: int
@@ -520,21 +104,6 @@ class CheckRun:
             conclusion=str(run["conclusion"]),
             html_url=str(run["html_url"]),
         )
-
-
-def checks(commit: str) -> dict[str, CheckRun]:
-    """Return all the GitHub Actions results."""
-    # The PR may be updated, so we can't use cached API calls.
-    check_runs = {
-        r["name"]: CheckRun.fromJSON(r)
-        for s in api_uncached(
-            f"/repos/{repository()}/commits/{commit}/check-suites",
-        )["check_suites"]
-        for r in api_uncached(
-            f"/repos/{repository()}/check-suites/{s['id']}/check-runs",
-        )["check_runs"]
-    }
-    return check_runs
 
 
 @dataclass
@@ -562,36 +131,6 @@ class ActionRun:
         )
 
 
-def action_runs(branch: str, head_sha: str) -> list[ActionRun]:
-    """Return all the GitHub Actions results."""
-    # The PR may be updated, so we can't use cached API calls.
-    return [
-        ActionRun.fromJSON(r)
-        for r in api_uncached(
-            f"/repos/{repository()}/actions/runs",
-            params=(("branch", branch), ("head_sha", head_sha)),
-        )["workflow_runs"]
-    ]
-
-
-def download_artifact(name: str, run_id: int) -> bytes:
-    """Download the artifact with the given name from the given run."""
-    response = requests.get(
-        f"{api_url()}/repos/{repository()}/actions/runs/{run_id}/artifacts",
-        headers=_auth_headers(AuthLevel.GITHUB),
-    )
-    _process_error(response)
-    for artifact in response.json()["artifacts"]:
-        if artifact["name"] == name:
-            response = requests.get(
-                f"{api_url()}/repos/{repository()}/actions/artifacts/{artifact['id']}/zip",
-                headers=_auth_headers(AuthLevel.GITHUB),
-            )
-            _process_error(response)
-            return response.content
-    raise ValueError(f"Artifact {name} not found in run {run_id}")
-
-
 @dataclass
 class ReleaseAsset:
     id: int
@@ -611,227 +150,783 @@ class ReleaseAsset:
         )
 
 
-def release_assets(tag: str) -> list[ReleaseAsset]:
-    """Return all the assets for a given tag."""
-    return [
-        ReleaseAsset.fromJSON(a)
-        for a in api_uncached(f"/repos/{repository()}/releases/{release_id(tag)}")[
-            "assets"
+def _process_error(response: requests.Response) -> None:
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        print(response.json())
+        raise e
+
+
+api_requests: list[str] = []
+
+
+class GitHub:
+    """A provider for GitHub API calls."""
+
+    def __init__(
+        self,
+        git_prov: git.Git = git.DEFAULT_GIT,
+        api_url: str = os.getenv("GITHUB_API_URL") or "https://api.github.com",
+        github_token: str | None = os.getenv("GITHUB_TOKEN"),
+        releaser_token: str | None = os.getenv("TOKEN_RELEASES"),
+        repo_name: str | None = os.getenv("GITHUB_REPOSITORY"),
+    ) -> None:
+        self.git = git_prov
+        self._api_url = api_url
+        self._github_token = github_token
+        self._releaser_token = releaser_token
+        self._repo_name = repo_name
+        self._cache: dict[tuple[Any, ...], Any] = {}
+
+        if self._github_token:
+            print("Authorization with GITHUB_TOKEN")
+        else:
+            print("Unauthorized (low rate limit applies)")
+            print("Set GITHUB_TOKEN to increase the rate limit")
+
+        if self._releaser_token:
+            print("Authorization with TOKEN_RELEASES")
+
+    def _process_error(self, response: requests.Response) -> None:
+        try:
+            response.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            print(response.json())
+            raise e
+
+    def _auth_headers(self, auth: AuthLevel) -> dict[str, str]:
+        token = (
+            self._releaser_token if auth == AuthLevel.RELEASER else self._github_token
+        )
+        if not token:
+            if auth != AuthLevel.OPTIONAL:
+                raise ValueError("GITHUB_TOKEN is needed")
+            return {}
+        return {"Authorization": f"Token {token}"}
+
+    def api_uncached(
+        self,
+        url: str,
+        auth: AuthLevel = AuthLevel.OPTIONAL,
+        params: tuple[tuple[str, str | int], ...] = tuple(),
+    ) -> Any:
+        api_requests.append(f"GET {self._api_url}{url}")
+        response = requests.get(
+            f"{self._api_url}{url}",
+            headers=self._auth_headers(auth=auth),
+            params=dict(params),
+        )
+        self._process_error(response)
+        return response.json()
+
+    def api(
+        self,
+        url: str,
+        auth: AuthLevel = AuthLevel.OPTIONAL,
+        params: tuple[tuple[str, str | int], ...] = tuple(),
+    ) -> Any:
+        key = (url, auth, params)
+        if key not in self._cache:
+            self._cache[key] = self.api_uncached(url, auth, params)
+        return self._cache[key]
+
+    def clear_cache(self) -> None:
+        """Clear the cache of API calls."""
+        self._cache.clear()
+
+    def graphql(self, query: str) -> Any:
+        """Call the GitHub GraphQL API with the given query."""
+        response = requests.post(
+            f"{self._api_url}/graphql",
+            headers={
+                "Accept": "application/json",
+                **self._auth_headers(AuthLevel.GITHUB),
+            },
+            json={"query": query},
+        )
+        self._process_error(response)
+        return response.json()["data"]
+
+    def username(self) -> str | None:
+        """Get the GitHub username for the current authenticated user."""
+        if not self._github_token:
+            return None
+        return str(self.api("/user", auth=AuthLevel.GITHUB)["login"])
+
+    def release_id(self, tag: str) -> int:
+        """Get the GitHub release ID number for a tag."""
+        for release in self.api(f"/repos/{self.repository()}/releases"):
+            if release["tag_name"] == tag:
+                return int(release["id"])
+        raise ValueError(f"Release {tag} not found in {self.repository()}")
+
+    def actor(self) -> str:
+        """Returns the GitHub username for the current repository."""
+        github_actor = os.getenv("GITHUB_ACTOR")
+        if github_actor:
+            return github_actor
+        u = self.username()
+        if u:
+            return u
+        remotes = self.git.remotes()
+        for remote in ("origin", "upstream"):
+            if remote in remotes:
+                try:
+                    slug = self.git.remote_slug(remote)
+                    return slug.owner
+                except ValueError:
+                    continue
+        raise ValueError("Could not determine GitHub actor")
+
+    def repository(self) -> str:
+        if self._repo_name:
+            return self._repo_name
+        github_repository = os.getenv("GITHUB_REPOSITORY")
+        if github_repository:
+            return github_repository
+        remotes = self.git.remotes()
+        for remote in ("upstream", "origin"):
+            if remote in remotes:
+                try:
+                    slug = self.git.remote_slug(remote)
+                    return str(slug)
+                except ValueError:
+                    continue
+        raise ValueError("Could not determine repository")
+
+    def repository_name(self) -> str:
+        try:
+            return self.repository().split("/")[-1]
+        except ValueError:
+            return os.path.basename(self.git.root())
+
+    def milestones(self) -> dict[str, Milestone]:
+        """Get the names and IDs of all milestones in the repository."""
+        return {
+            m["title"]: Milestone.fromJSON(m)
+            for m in self.api(f"/repos/{self.repository()}/milestones")
+        }
+
+    def milestone(self, title: str) -> Milestone:
+        """Get the milestone with the given title."""
+        return self.milestones()[title]
+
+    def next_milestone(self) -> Milestone:
+        """Get the next release number (based on the smallest open milestone)."""
+        return min(
+            (
+                m
+                for m in self.milestones().values()
+                if re.match(r"v\d+\.\d+\.\d+$", m.title)
+            ),
+            key=lambda m: tuple(map(int, m.title[1:].split("."))),
+        )
+
+    def assign_milestone(self, issue_id: int, milestone: int) -> None:
+        """Assign the given milestone to the given issue."""
+        response = requests.patch(
+            f"{self._api_url}/repos/{self.repository()}/issues/{issue_id}",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={"milestone": milestone},
+        )
+        self._process_error(response)
+
+    def close_milestone(self, number: int) -> None:
+        """Close the milestone with the given number."""
+        response = requests.patch(
+            f"{self._api_url}/repos/{self.repository()}/milestones/{number}",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={"state": "closed"},
+        )
+        self._process_error(response)
+
+    def open_milestone_issues(self, milestone: int) -> list[Issue]:
+        """Get all the open issues for a given milestone."""
+        return [
+            Issue.fromJSON(i)
+            for i in self.api(
+                f"/repos/{self.repository()}/issues",
+                params=(
+                    ("milestone", milestone),
+                    ("state", "open"),
+                ),
+            )
         ]
-    ]
+
+    def get_issue(self, issue_number: int) -> Issue:
+        """Get the issue with the given number."""
+        return Issue.fromJSON(
+            self.api(f"/repos/{self.repository()}/issues/{issue_number}")
+        )
+
+    def rename_issue(self, issue_number: int, title: str) -> None:
+        """Rename the issue with the given number."""
+        response = requests.patch(
+            f"{self._api_url}/repos/{self.repository()}/issues/{issue_number}",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={"title": title},
+        )
+        self._process_error(response)
+
+    def close_issue(self, issue_number: int) -> None:
+        """Close the issue with the given number."""
+        response = requests.patch(
+            f"{self._api_url}/repos/{self.repository()}/issues/{issue_number}",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={"state": "closed"},
+        )
+        self._process_error(response)
+
+    def latest_release(self) -> str:
+        """Get the name of the current release in the repository."""
+        return str(self.api(f"/repos/{self.repository()}/releases/latest")["tag_name"])
+
+    def prereleases(self, version: str) -> list[str]:
+        """Get the names of all prereleases for a given version in the repository."""
+        return [
+            r["tag_name"]
+            for r in self.api(f"/repos/{self.repository()}/releases")
+            if f"{version}-rc." in r["tag_name"] and r["prerelease"] and not r["draft"]
+        ]
+
+    def release_candidates(self, version: str) -> list[int]:
+        """Get the RC numbers for prereleases of a given version."""
+        return [
+            int(i)
+            for r in self.prereleases(version)
+            for i in re.findall(r"-rc\.(\d+)$", r)
+        ]
+
+    def issue_assign(self, issue_id: int, assignees: list[str]) -> None:
+        """Assign the given issue to the given list of users."""
+        response = requests.post(
+            f"{self._api_url}/repos/{self.repository()}/issues/{issue_id}/assignees",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={"assignees": assignees},
+        )
+        self._process_error(response)
+
+    def issue_unassign(self, issue_id: int, assignees: list[str]) -> None:
+        """Unassign the given issue from the given list of users."""
+        response = requests.delete(
+            f"{self._api_url}/repos/{self.repository()}/issues/{issue_id}/assignees",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={"assignees": assignees},
+        )
+        self._process_error(response)
+
+    def create_pr(
+        self, title: str, body: str, head: str, base: str, milestone: int
+    ) -> PullRequest:
+        """Create a pull request with the given title and body."""
+        response = requests.post(
+            f"{self._api_url}/repos/{self.repository()}/pulls",
+            headers=self._auth_headers(AuthLevel.RELEASER),
+            json={
+                "title": title,
+                "body": body,
+                "head": head,
+                "base": base,
+                "draft": True,
+            },
+        )
+        self._process_error(response)
+        pr = PullRequest.fromJSON(response.json())
+        if milestone:
+            self.change_issue(pr.number, {"milestone": milestone})
+        return pr
+
+    def find_pr(self, head_sha: str, base: str) -> PullRequest | None:
+        """Find a PR with the given title, head.sha, and base."""
+        response = self.api_uncached(
+            f"/repos/{self.repository()}/pulls",
+            params=(
+                ("state", "all"),
+                ("base", base),
+                ("per_page", 100),
+            ),
+        )
+        for pr in response:
+            if pr["head"]["sha"] == head_sha:
+                return PullRequest.fromJSON(pr)
+        return None
+
+    def find_pr_for_branch(
+        self, head: str, base: str, state: str = "all"
+    ) -> PullRequest | None:
+        """Find a PR with the given head (actor:branch) and base."""
+        response = self.api_uncached(
+            f"/repos/{self.repository()}/pulls",
+            params=(
+                ("state", state),
+                ("base", base),
+                ("head", head),
+                ("per_page", 100),
+            ),
+        )
+        return PullRequest.fromJSON(response[0]) if response else None
+
+    def change_pr(self, number: int, changes: dict[str, str | int]) -> None:
+        """Modify a PR with the given number."""
+        response = requests.patch(
+            f"{self._api_url}/repos/{self.repository()}/pulls/{number}",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json=changes,
+        )
+        self._process_error(response)
+
+    def change_issue(self, number: int, changes: dict[str, str | int]) -> None:
+        """Modify an issue with the given number."""
+        response = requests.patch(
+            f"{self._api_url}/repos/{self.repository()}/issues/{number}",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json=changes,
+        )
+        self._process_error(response)
+
+    def checks(self, commit: str) -> dict[str, CheckRun]:
+        """Return all the GitHub Actions results."""
+        check_runs = {
+            r["name"]: CheckRun.fromJSON(r)
+            for s in self.api_uncached(
+                f"/repos/{self.repository()}/commits/{commit}/check-suites",
+            )["check_suites"]
+            for r in self.api_uncached(
+                f"/repos/{self.repository()}/check-suites/{s['id']}/check-runs",
+            )["check_runs"]
+        }
+        return check_runs
+
+    def action_runs(self, branch: str, head_sha: str) -> list[ActionRun]:
+        """Return all the GitHub Actions results."""
+        return [
+            ActionRun.fromJSON(r)
+            for r in self.api_uncached(
+                f"/repos/{self.repository()}/actions/runs",
+                params=(("branch", branch), ("head_sha", head_sha)),
+            )["workflow_runs"]
+        ]
+
+    def download_artifact(self, name: str, run_id: int) -> bytes:
+        """Download the artifact with the given name from the given run."""
+        response = requests.get(
+            f"{self._api_url}/repos/{self.repository()}/actions/runs/{run_id}/artifacts",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+        )
+        self._process_error(response)
+        for artifact in response.json()["artifacts"]:
+            if artifact["name"] == name:
+                response = requests.get(
+                    f"{self._api_url}/repos/{self.repository()}/actions/artifacts/{artifact['id']}/zip",
+                    headers=self._auth_headers(AuthLevel.GITHUB),
+                )
+                self._process_error(response)
+                return response.content
+        raise ValueError(f"Artifact {name} not found in run {run_id}")
+
+    def release_assets(self, tag: str) -> list[ReleaseAsset]:
+        """Return all the assets for a given tag."""
+        return [
+            ReleaseAsset.fromJSON(a)
+            for a in self.api_uncached(
+                f"/repos/{self.repository()}/releases/{self.release_id(tag)}"
+            )["assets"]
+        ]
+
+    def download_asset(self, asset_id: int) -> bytes:
+        """Download the asset with the given ID."""
+        response = requests.get(
+            f"{self._api_url}/repos/{self.repository()}/releases/assets/{asset_id}",
+            headers={
+                "Accept": "application/octet-stream",
+                **self._auth_headers(AuthLevel.OPTIONAL),
+            },
+        )
+        self._process_error(response)
+        return response.content
+
+    def upload_asset(
+        self, tag: str, filename: str, content_type: str, data: bytes | IO[bytes]
+    ) -> None:
+        """Upload an asset to the release with the given tag."""
+        response = requests.post(
+            f"https://uploads.github.com/repos/{self.repository()}/releases/{self.release_id(tag)}/assets",
+            headers={
+                "Content-Type": content_type,
+                **self._auth_headers(AuthLevel.GITHUB),
+            },
+            data=data,
+            params={
+                "name": filename,
+            },
+        )
+        self._process_error(response)
+
+    def mark_ready_for_review(self, pr_node_id: str) -> None:
+        """Mark a PR as ready for review."""
+        self.graphql(f"""
+            mutation MarkPrReady {{
+                markPullRequestReadyForReview(input: {{pullRequestId: "{pr_node_id}"}}) {{
+                    pullRequest {{
+                        id
+                    }}
+                }}
+            }}
+        """)
+
+    def push_signed(
+        self,
+        slug: types.RepoSlug,
+        commit_sha: str,
+        head_branch: str,
+        target_branch: str,
+    ) -> str:
+        """Create a signed commit (by github-actions[bot]) for the given commit."""
+        files_changed = self.git.files_changed(commit_sha)
+        tree_objects = []
+        for file in files_changed:
+            with open(file, "rb") as f:
+                blob_response = requests.post(
+                    f"{self._api_url}/repos/{slug}/git/blobs",
+                    headers=self._auth_headers(AuthLevel.GITHUB),
+                    json={"content": f.read().decode("utf-8"), "encoding": "utf-8"},
+                )
+                self._process_error(blob_response)
+                tree_objects.append(
+                    {
+                        "path": file,
+                        "mode": "100644",
+                        "type": "blob",
+                        "sha": blob_response.json()["sha"],
+                    }
+                )
+        head_sha = self.git.branch_sha(head_branch)
+        tree_response = requests.post(
+            f"{self._api_url}/repos/{slug}/git/trees",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={
+                "base_tree": head_sha,
+                "tree": tree_objects,
+            },
+        )
+        self._process_error(tree_response)
+        commit_response = requests.post(
+            f"{self._api_url}/repos/{slug}/git/commits",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={
+                "message": self.git.commit_message(commit_sha),
+                "tree": tree_response.json()["sha"],
+                "parents": [head_sha],
+            },
+        )
+        self._process_error(commit_response)
+        target_sha = str(commit_response.json()["sha"])
+        branch_response = requests.get(
+            f"{self._api_url}/repos/{slug}/branches/{target_branch}",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+        )
+        if branch_response.status_code == 404:
+            update_response = requests.post(
+                f"{self._api_url}/repos/{slug}/git/refs",
+                headers=self._auth_headers(AuthLevel.RELEASER),
+                json={
+                    "ref": f"refs/heads/{target_branch}",
+                    "sha": target_sha,
+                },
+            )
+        else:
+            branch_encoded = urllib.parse.quote_plus(target_branch)
+            update_response = requests.patch(
+                f"{self._api_url}/repos/{slug}/git/refs/heads/{branch_encoded}",
+                headers=self._auth_headers(AuthLevel.RELEASER),
+                json={
+                    "sha": target_sha,
+                    "force": True,
+                },
+            )
+        self._process_error(update_response)
+        return target_sha
+
+    def tag(
+        self, slug: types.RepoSlug, commit_sha: str, tag_name: str, tag_message: str
+    ) -> str:
+        """Create an unsigned tag (by github-actions[bot]) for the given commit."""
+        if not tag_message.endswith("\n"):
+            tag_message += "\n"
+        tag_response = requests.post(
+            f"{self._api_url}/repos/{slug}/git/tags",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={
+                "tag": tag_name,
+                "message": tag_message,
+                "object": commit_sha,
+                "type": "commit",
+                "tagger": {
+                    "name": "github-actions[bot]",
+                    "email": "41898282+github-actions[bot]@users.noreply.github.com",
+                },
+            },
+        )
+        self._process_error(tag_response)
+        tag_ref_response = requests.post(
+            f"{self._api_url}/repos/{slug}/git/refs",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={
+                "ref": f"refs/tags/{tag_name}",
+                "sha": tag_response.json()["sha"],
+            },
+        )
+        self._process_error(tag_ref_response)
+        return str(tag_response.json()["sha"])
+
+    def set_release_notes(self, tag: str, notes: str, prerelease: bool) -> None:
+        """Set the release notes for a given tag in the release description."""
+        response = requests.patch(
+            f"{self._api_url}/repos/{self.repository()}/releases/{self.release_id(tag)}",
+            headers=self._auth_headers(AuthLevel.GITHUB),
+            json={
+                "body": notes,
+                "tag_name": tag,
+                "prerelease": prerelease,
+            },
+        )
+        self._process_error(response)
+
+    def release_is_published(self, tag: str) -> bool:
+        """Check if the release with the given tag is published."""
+        return (
+            self.api_uncached(
+                f"/repos/{self.repository()}/releases/{self.release_id(tag)}"
+            )["published_at"]
+            is not None
+        )
+
+    def head_ref(self) -> str:
+        return os.getenv("GITHUB_HEAD_REF") or self.git.current_branch()
+
+    def pr_number(self) -> int:
+        return int(
+            self.api(
+                f"/repos/{self.repository()}/pulls",
+                params=(("head", f"{self.actor()}:{self.head_ref()}"),),
+            )[0]["number"]
+        )
+
+    def ref_name(self) -> str:
+        return os.getenv("GITHUB_REF_NAME") or f"{self.pr_number()}/merge"
+
+    def pr(self) -> Any:
+        return self.api(
+            f"/repos/{self.repository()}/pulls/{self.ref_name().split('/')[0]}"
+        )
+
+    def pr_branch(self) -> str:
+        return str(self.pr()["head"]["ref"])
+
+    def base_ref(self) -> str:
+        return os.getenv("GITHUB_BASE_REF") or str(self.pr()["base"]["ref"])
+
+    def base_branch(self) -> str:
+        remotes = self.git.remotes()
+        if "upstream" in remotes:
+            return f"upstream/{self.base_ref()}"
+        elif "origin" in remotes:
+            return f"origin/{self.base_ref()}"
+        raise ValueError("No upstream or origin remotes found")
+
+
+DEFAULT_GITHUB = GitHub()
+
+
+def username() -> str | None:
+    return DEFAULT_GITHUB.username()
+
+
+def release_id(tag: str) -> int:
+    return DEFAULT_GITHUB.release_id(tag)
+
+
+def actor() -> str:
+    return DEFAULT_GITHUB.actor()
+
+
+def milestones() -> dict[str, Milestone]:
+    return DEFAULT_GITHUB.milestones()
+
+
+def milestone(title: str) -> Milestone:
+    return DEFAULT_GITHUB.milestone(title)
+
+
+def next_milestone() -> Milestone:
+    return DEFAULT_GITHUB.next_milestone()
+
+
+def assign_milestone(issue_id: int, milestone: int) -> None:
+    DEFAULT_GITHUB.assign_milestone(issue_id, milestone)
+
+
+def close_milestone(number: int) -> None:
+    DEFAULT_GITHUB.close_milestone(number)
+
+
+def open_milestone_issues(milestone: int) -> list[Issue]:
+    return DEFAULT_GITHUB.open_milestone_issues(milestone)
+
+
+def get_issue(issue_number: int) -> Issue:
+    return DEFAULT_GITHUB.get_issue(issue_number)
+
+
+def rename_issue(issue_number: int, title: str) -> None:
+    DEFAULT_GITHUB.rename_issue(issue_number, title)
+
+
+def close_issue(issue_number: int) -> None:
+    DEFAULT_GITHUB.close_issue(issue_number)
+
+
+def latest_release() -> str:
+    return DEFAULT_GITHUB.latest_release()
+
+
+def prereleases(version: str) -> list[str]:
+    return DEFAULT_GITHUB.prereleases(version)
+
+
+def release_candidates(version: str) -> list[int]:
+    return DEFAULT_GITHUB.release_candidates(version)
+
+
+def issue_assign(issue_id: int, assignees: list[str]) -> None:
+    DEFAULT_GITHUB.issue_assign(issue_id, assignees)
+
+
+def issue_unassign(issue_id: int, assignees: list[str]) -> None:
+    DEFAULT_GITHUB.issue_unassign(issue_id, assignees)
+
+
+def create_pr(
+    title: str, body: str, head: str, base: str, milestone: int
+) -> PullRequest:
+    return DEFAULT_GITHUB.create_pr(title, body, head, base, milestone)
+
+
+def find_pr(head_sha: str, base: str) -> PullRequest | None:
+    return DEFAULT_GITHUB.find_pr(head_sha, base)
+
+
+def find_pr_for_branch(head: str, base: str, state: str = "all") -> PullRequest | None:
+    return DEFAULT_GITHUB.find_pr_for_branch(head, base, state)
+
+
+def change_pr(number: int, changes: dict[str, str | int]) -> None:
+    DEFAULT_GITHUB.change_pr(number, changes)
+
+
+def change_issue(number: int, changes: dict[str, str | int]) -> None:
+    DEFAULT_GITHUB.change_issue(number, changes)
+
+
+def checks(commit: str) -> dict[str, CheckRun]:
+    return DEFAULT_GITHUB.checks(commit)
+
+
+def action_runs(branch: str, head_sha: str) -> list[ActionRun]:
+    return DEFAULT_GITHUB.action_runs(branch, head_sha)
+
+
+def download_artifact(name: str, run_id: int) -> bytes:
+    return DEFAULT_GITHUB.download_artifact(name, run_id)
+
+
+def release_assets(tag: str) -> list[ReleaseAsset]:
+    return DEFAULT_GITHUB.release_assets(tag)
 
 
 def download_asset(asset_id: int) -> bytes:
-    """Download the asset with the given ID."""
-    response = requests.get(
-        f"{api_url()}/repos/{repository()}/releases/assets/{asset_id}",
-        headers={
-            "Accept": "application/octet-stream",
-            **_auth_headers(AuthLevel.OPTIONAL),
-        },
-    )
-    _process_error(response)
-    return response.content
+    return DEFAULT_GITHUB.download_asset(asset_id)
 
 
 def upload_asset(
-    tag: str,
-    filename: str,
-    content_type: str,
-    data: bytes | IO[bytes],
+    tag: str, filename: str, content_type: str, data: bytes | IO[bytes]
 ) -> None:
-    """Upload an asset to the release with the given tag.
-
-    The data should be the contents of the file to upload or a binary stream.
-    """
-    response = requests.post(
-        f"https://uploads.github.com/repos/{repository()}/releases/{release_id(tag)}/assets",
-        headers={
-            "Content-Type": content_type,
-            **_auth_headers(AuthLevel.GITHUB),
-        },
-        data=data,
-        params={
-            "name": filename,
-        },
-    )
-    _process_error(response)
+    DEFAULT_GITHUB.upload_asset(tag, filename, content_type, data)
 
 
-def graphql(query: str) -> Any:
-    """Call the GitHub GraphQL API with the given query."""
-    response = requests.post(
-        f"{api_url()}/graphql",
-        headers={
-            "Accept": "application/json",
-            **_auth_headers(AuthLevel.GITHUB),
-        },
-        json={"query": query},
-    )
-    _process_error(response)
-    return response.json()["data"]
-
-
-# markPullRequestReadyForReview via graphql
 def mark_ready_for_review(pr_node_id: str) -> None:
-    """Mark a PR as ready for review."""
-    graphql(f"""
-        mutation MarkPrReady {{
-            markPullRequestReadyForReview(input: {{pullRequestId: "{pr_node_id}"}}) {{
-                pullRequest {{
-                    id
-                }}
-            }}
-        }}
-    """)
+    DEFAULT_GITHUB.mark_ready_for_review(pr_node_id)
 
 
 def push_signed(
-    slug: types.RepoSlug,
-    commit_sha: str,
-    head_branch: str,
-    target_branch: str,
+    slug: types.RepoSlug, commit_sha: str, head_branch: str, target_branch: str
 ) -> str:
-    """Create a signed commit (by github-actions[bot]) for the given commit.
-
-    Creates blobs for all the changes in the commit and creates a new tree on
-    top of the given head branch. Then creates a new commit with the new tree
-    and updates the target branch to point to the new commit.
-
-    Returns the SHA of the new commit.
-    """
-    files_changed = git.files_changed(commit_sha)
-    tree_objects = []
-    for file in files_changed:
-        with open(file, "rb") as f:
-            blob_response = requests.post(
-                f"{api_url()}/repos/{slug}/git/blobs",
-                headers=_auth_headers(AuthLevel.GITHUB),
-                json={"content": f.read().decode("utf-8"), "encoding": "utf-8"},
-            )
-            _process_error(blob_response)
-            tree_objects.append(
-                {
-                    "path": file,
-                    "mode": "100644",
-                    "type": "blob",
-                    "sha": blob_response.json()["sha"],
-                }
-            )
-    head_sha = git.branch_sha(head_branch)
-    tree_response = requests.post(
-        f"{api_url()}/repos/{slug}/git/trees",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={
-            "base_tree": head_sha,
-            "tree": tree_objects,
-        },
-    )
-    _process_error(tree_response)
-    commit_response = requests.post(
-        f"{api_url()}/repos/{slug}/git/commits",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={
-            "message": git.commit_message(commit_sha),
-            "tree": tree_response.json()["sha"],
-            "parents": [head_sha],
-        },
-    )
-    _process_error(commit_response)
-    target_sha = str(commit_response.json()["sha"])
-    branch_response = requests.get(
-        f"{api_url()}/repos/{slug}/branches/{target_branch}",
-        headers=_auth_headers(AuthLevel.GITHUB),
-    )
-    if branch_response.status_code == 404:
-        update_response = requests.post(
-            f"{api_url()}/repos/{slug}/git/refs",
-            headers=_auth_headers(AuthLevel.RELEASER),
-            json={
-                "ref": f"refs/heads/{target_branch}",
-                "sha": target_sha,
-            },
-        )
-    else:
-        branch_encoded = urllib.parse.quote_plus(target_branch)
-        update_response = requests.patch(
-            f"{api_url()}/repos/{slug}/git/refs/heads/{branch_encoded}",
-            headers=_auth_headers(AuthLevel.RELEASER),
-            json={
-                "sha": target_sha,
-                "force": True,
-            },
-        )
-    _process_error(update_response)
-    return target_sha
+    return DEFAULT_GITHUB.push_signed(slug, commit_sha, head_branch, target_branch)
 
 
-def tag(
-    slug: types.RepoSlug,
-    commit_sha: str,
-    tag_name: str,
-    tag_message: str,
-) -> str:
-    """Create an unsigned tag (by github-actions[bot]) for the given commit.
-
-    A human will need to sign it afterwards with the same annotation.
-
-    Returns the SHA of the new tag.
-    """
-    if not tag_message.endswith("\n"):
-        tag_message += "\n"
-    tag_response = requests.post(
-        f"{api_url()}/repos/{slug}/git/tags",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={
-            "tag": tag_name,
-            "message": tag_message,
-            "object": commit_sha,
-            "type": "commit",
-            "tagger": {
-                "name": "github-actions[bot]",
-                "email": "41898282+github-actions[bot]@users.noreply.github.com",
-            },
-        },
-    )
-    _process_error(tag_response)
-    tag_ref_response = requests.post(
-        f"{api_url()}/repos/{slug}/git/refs",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={
-            "ref": f"refs/tags/{tag_name}",
-            "sha": tag_response.json()["sha"],
-        },
-    )
-    _process_error(tag_ref_response)
-    return str(tag_response.json()["sha"])
+def tag(slug: types.RepoSlug, commit_sha: str, tag_name: str, tag_message: str) -> str:
+    return DEFAULT_GITHUB.tag(slug, commit_sha, tag_name, tag_message)
 
 
 def set_release_notes(tag: str, notes: str, prerelease: bool) -> None:
-    """Set the release notes for a given tag in the release description."""
-    response = requests.patch(
-        f"{api_url()}/repos/{repository()}/releases/{release_id(tag)}",
-        headers=_auth_headers(AuthLevel.GITHUB),
-        json={
-            "body": notes,
-            "tag_name": tag,
-            "prerelease": prerelease,
-        },
-    )
-    _process_error(response)
+    DEFAULT_GITHUB.set_release_notes(tag, notes, prerelease)
 
 
 def release_is_published(tag: str) -> bool:
-    """Check if the release with the given tag is published.
+    return DEFAULT_GITHUB.release_is_published(tag)
 
-    Uncached, because we want to check whether our publishing worked.
-    """
-    return (
-        api_uncached(f"/repos/{repository()}/releases/{release_id(tag)}")[
-            "published_at"
-        ]
-        is not None
-    )
+
+def repository() -> str:
+    return DEFAULT_GITHUB.repository()
+
+
+def repository_name() -> str:
+    return DEFAULT_GITHUB.repository_name()
+
+
+def head_ref() -> str:
+    return DEFAULT_GITHUB.head_ref()
+
+
+def pr_number() -> int:
+    return DEFAULT_GITHUB.pr_number()
+
+
+def ref_name() -> str:
+    return DEFAULT_GITHUB.ref_name()
+
+
+def pr() -> Any:
+    return DEFAULT_GITHUB.pr()
+
+
+def pr_branch() -> str:
+    return DEFAULT_GITHUB.pr_branch()
+
+
+def base_ref() -> str:
+    return DEFAULT_GITHUB.base_ref()
+
+
+def base_branch() -> str:
+    return DEFAULT_GITHUB.base_branch()
+
+
+def api_url() -> str:
+    return DEFAULT_GITHUB._api_url
+
+
+def api(
+    url: str,
+    auth: AuthLevel = AuthLevel.OPTIONAL,
+    params: tuple[tuple[str, str | int], ...] = tuple(),
+) -> Any:
+    return DEFAULT_GITHUB.api(url, auth, params)
+
+
+def clear_cache() -> None:
+    DEFAULT_GITHUB.clear_cache()
 
 
 def patch_markdown_section(body: str, header: str, content: str) -> str:

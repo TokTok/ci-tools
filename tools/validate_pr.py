@@ -8,7 +8,7 @@ import re
 import subprocess  # nosec
 from dataclasses import dataclass
 from functools import cache as memoize
-from typing import Optional
+from typing import Any
 
 import update_changelog
 import update_flathub_descriptor_dependencies
@@ -20,7 +20,7 @@ class Config:
     commit: bool
     debug: bool = False
     release: bool = False
-    git_tag: Optional[str] = None
+    git_tag: str | None = None
 
 
 def parse_args() -> Config:
@@ -58,16 +58,21 @@ def toktok_dir() -> pathlib.Path:
     return git.root_dir().parent
 
 
+def parse_weblate_prs(prs_data: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """Extract titles and URLs from open Weblate PRs data."""
+    return [
+        (pr["title"], pr["html_url"])
+        for pr in prs_data
+        if pr["user"]["login"] == "weblate"
+    ]
+
+
 def github_weblate_prs() -> list[tuple[str, str]]:
     """List all the open Weblate PRs.
 
     Weblate PRs are those who are opened by the Weblate bot called "weblate".
     """
-    return [
-        (pr["title"], pr["html_url"])
-        for pr in github.api(f"/repos/{github.repository()}/pulls")
-        if pr["user"]["login"] == "weblate"
-    ]
+    return parse_weblate_prs(github.api(f"/repos/{github.repository()}/pulls"))
 
 
 def check_github_weblate_prs(failures: list[str]) -> None:
@@ -151,6 +156,12 @@ def check_flathub_descriptor_dependencies(failures: list[str], config: Config) -
             check.ok("The flathub descriptor dependencies are up-to-date")
 
 
+def parse_toxcore_version(content: str) -> str | None:
+    """Extract the toxcore version from the download script content."""
+    found = re.search(r"^TOXCORE_VERSION=(.*)$", content, re.MULTILINE)
+    return found.group(1) if found else None
+
+
 def check_toxcore_version(failures: list[str]) -> None:
     """Check that qtox/download/download_toxcore.sh is up-to-date.
 
@@ -164,11 +175,10 @@ def check_toxcore_version(failures: list[str]) -> None:
             dockerfiles_dir(), "qtox", "download", "download_toxcore.sh"
         )
         with open(download_toxcore_path) as f:
-            found = re.search(r"^TOXCORE_VERSION=(.*)$", f.read(), re.MULTILINE)
-            if not found:
+            toxcore_version = parse_toxcore_version(f.read())
+            if not toxcore_version:
                 check.fail("Could not find the toxcore version in the download script")
                 return
-            toxcore_version = found.group(1)
 
         latest_toxcore_version = github.api("/repos/TokTok/c-toxcore/releases/latest")[
             "tag_name"
@@ -213,11 +223,18 @@ def check_package_versions(failures: list[str], config: Config) -> None:
             check.ok("The package versions are up-to-date")
 
 
-def find_appdata_xml() -> Optional[pathlib.Path]:
+def find_appdata_xml() -> pathlib.Path | None:
     """Find the appdata.xml file in the repository."""
     for path in (git.root_dir() / "platform" / "linux").rglob("*.appdata.xml"):
         return path
     return None
+
+
+def parse_version_diff(diff: str) -> tuple[list[str], list[str]]:
+    """Extract removed and added version numbers from a git diff."""
+    minus = re.findall(r"^- [^\n<]*<release version=\"(.*)\" date", diff, re.MULTILINE)
+    plus = re.findall(r"^\+ [^\n<]*<release version=\"(.*)\" date", diff, re.MULTILINE)
+    return minus, plus
 
 
 def check_no_version_changes(failures: list[str]) -> None:
@@ -251,8 +268,7 @@ def check_no_version_changes(failures: list[str]) -> None:
             cwd=git.root_dir(),
             universal_newlines=True,
         )
-        minus = re.findall(r"^-[^<]+<release version=\"(.*)\" date", diff, re.MULTILINE)
-        plus = re.findall(r"^\+[^<]+<release version=\"(.*)\" date", diff, re.MULTILINE)
+        minus, plus = parse_version_diff(diff)
         if minus and plus:
             check.fail(
                 "Version changes are not allowed"

@@ -9,7 +9,7 @@ import textwrap
 import xml.dom.minidom as minidom  # nosec
 from dataclasses import dataclass
 from functools import cache as memoize
-from typing import Any, Optional, cast
+from typing import Any, cast
 from xml.dom.minicompat import EmptyNodeList
 
 import requests
@@ -35,9 +35,9 @@ class Language:
     def __init__(
         self,
         weblate_code: str,
-        baidu_code: Optional[str] = None,
-        google_code: Optional[str] = None,
-        lupdate_code: Optional[str] = None,
+        baidu_code: str | None = None,
+        google_code: str | None = None,
+        lupdate_code: str | None = None,
     ):
         self.weblate_code = weblate_code
         self.baidu_code = baidu_code or weblate_code
