@@ -1,3 +1,15 @@
+<a name="v0.8.3"></a>
+
+## v0.8.3 (2026-02-06)
+
+### Release notes
+
+Full release of ci-tools for testing the production release workflows.
+
+#### Bug Fixes
+
+- Improve release progress tracking and publication links. ([a00ac1b3](https://github.com/TokTok/ci-tools/commit/a00ac1b3848043c8da83a89b70e190dbd4929d58))
+
 <a name="v0.8.3-rc.1"></a>
 
 ## v0.8.3-rc.1 (2026-02-06)
