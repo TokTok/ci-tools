@@ -832,3 +832,45 @@ def release_is_published(tag: str) -> bool:
         ]
         is not None
     )
+
+
+def patch_markdown_section(body: str, header: str, content: str) -> str:
+    """Patch a specific section in a Markdown body.
+
+    The section is identified by its header (e.g. "### Release progress").
+    If the section exists, its content is replaced.
+    If it doesn't exist, it is prepended to the body.
+    """
+    lines = body.splitlines()
+    start_index = -1
+    end_index = -1
+
+    header_level = len(header) - len(header.lstrip("#"))
+
+    for i, line in enumerate(lines):
+        if line.startswith(header):
+            start_index = i
+            # Find the next header of the same or higher level
+            for j in range(i + 1, len(lines)):
+                if lines[j].startswith("#"):
+                    next_header_level = len(lines[j]) - len(lines[j].lstrip("#"))
+                    if next_header_level <= header_level:
+                        end_index = j
+                        break
+            if end_index == -1:
+                end_index = len(lines)
+            break
+
+    # Normalize content: ensure it ends with a newline and is stripped
+    content = content.strip()
+    new_section = [header, content, ""]
+
+    if start_index != -1:
+        # Replace existing section
+        return (
+            "\n".join(lines[:start_index] + new_section + lines[end_index:]).strip()
+            + "\n"
+        )
+    else:
+        # Prepend new section
+        return "\n".join(new_section + lines).strip() + "\n"

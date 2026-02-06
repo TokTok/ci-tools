@@ -122,13 +122,109 @@ def require(condition: bool, message: Optional[str] = None) -> None:
         raise stage.InvalidState(message or "Requirement not met")
 
 
-def assign_to_user(s: stage.Stage, issue_id: int, action: str) -> stage.UserAbort:
+def assign_to_user(
+    s: stage.Stage,
+    config: Config,
+    version: str,
+    task: Optional[str] = None,
+    action: str = "",
+    instruction: Optional[str] = None,
+) -> stage.UserAbort:
     """Assign the issue to the acting user for them to take some action."""
-    issue = github.get_issue(issue_id)
-    github.issue_unassign(issue.number, ["toktok-releaser"])
-    github.issue_assign(issue.number, [github.actor()])
+    github.issue_unassign(config.issue, ["toktok-releaser"])
+    github.issue_assign(config.issue, [github.actor()])
+    update_dashboard(config, version, current_task=task, instruction=instruction)
     s.ok(f"Assigned to {github.actor()}")
     return stage.UserAbort(f"Returning to the user to {action}")
+
+
+def compute_done_milestones(config: Config, version: str) -> set[str]:
+    """Heuristics to determine which milestones are completed."""
+    done = set()
+
+    # 1. Preparation
+    if github.find_pr_for_branch(
+        f"{github.actor()}:{BRANCH_PREFIX}/{version}", config.main_branch
+    ):
+        done.add("Preparation")
+
+    # 2. Review
+    try:
+        if git.branch_sha(config.main_branch) == git.find_commit_sha(
+            release_commit_message(version)
+        ):
+            done.add("Preparation")
+            done.add("Review")
+    except Exception as e:
+        print(f"Heuristic for 'Review' milestone failed: {e}")
+
+    # 3. Tagging
+    if git.release_tag_exists(version) and git.tag_has_signature(version):
+        done.add("Preparation")
+        done.add("Review")
+        done.add("Tagging")
+
+    # 4. Binaries
+    if has_tarballs(version) and not sign_release_assets.todo(version):
+        done.add("Preparation")
+        done.add("Review")
+        done.add("Tagging")
+        done.add("Binaries")
+
+    # 5. Publication
+    if github.release_is_published(version):
+        done.add("Preparation")
+        done.add("Review")
+        done.add("Tagging")
+        done.add("Binaries")
+        done.add("Publication")
+
+    return done
+
+
+def render_progress_list(
+    done: set[str], current_task: Optional[str], instruction: Optional[str]
+) -> str:
+    """Render the Markdown task list for the dashboard."""
+    milestones = [
+        ("Preparation", "Create release branch and PR"),
+        ("Review", "Approve and merge PR"),
+        ("Tagging", "Tag and sign the release"),
+        ("Binaries", "Build and sign binaries"),
+        ("Publication", "Finalize release"),
+    ]
+
+    lines = []
+    for name, desc in milestones:
+        status = "[x]" if name in done else "[ ]"
+        if current_task == name:
+            lines.append(f"- {status} **Current Step: {desc}**")
+            if instruction:
+                lines.append(f"  > ℹ️ **Action Required:** {instruction}")
+        else:
+            lines.append(f"- {status} {desc}")
+
+    return "\n".join(lines)
+
+
+def update_dashboard(
+    config: Config,
+    version: str,
+    current_task: Optional[str] = None,
+    instruction: Optional[str] = None,
+) -> None:
+    if not config.issue or config.dryrun:
+        return
+
+    done = compute_done_milestones(config, version)
+    content = render_progress_list(done, current_task, instruction)
+
+    issue = github.get_issue(config.issue)
+    new_body = github.patch_markdown_section(
+        issue.body, "### Release progress", content
+    )
+    if new_body != issue.body:
+        github.change_issue(config.issue, {"body": new_body})
 
 
 def stage_init(config: Config) -> None:
@@ -145,7 +241,7 @@ def stage_init(config: Config) -> None:
                 raise stage.UserAbort("Assign the issue to toktok-releaser")
             if not issue.title.startswith("Release tracking issue"):
                 # This is not a release issue.
-                raise assign_to_user(s, config.issue, "deal with the issue")
+                raise assign_to_user(s, config, "", action="deal with the issue")
             config.production = "Production release" in issue.body.splitlines()
             s.ok(f"Processing release issue {issue.html_url}")
 
@@ -664,7 +760,14 @@ def stage_sign_tag(config: Config, version: str) -> None:
             return
         if config.github_actions:
             s.ok("Asking user to sign the tag")
-            raise assign_to_user(s, config.issue, "sign the tag")
+            raise assign_to_user(
+                s,
+                config,
+                version,
+                task="Tagging",
+                action="sign the tag",
+                instruction=f"Please sign the tag locally: `python3 tools/sign_tag.py --tag {version}`",
+            )
         sign_tag.main(
             sign_tag.Config(
                 tag=version,
@@ -697,7 +800,14 @@ def stage_build_binaries(config: Config, version: str) -> None:
         else:
             if config.github_actions:
                 s.ok("No builds found; waiting for a human to sign the tag")
-                raise assign_to_user(s, config.issue, "sign the tag")
+                raise assign_to_user(
+                    s,
+                    config,
+                    version,
+                    task="Tagging",
+                    action="sign the tag",
+                    instruction=f"No builds found; maybe the tag wasn't pushed? Please sign and push the tag: `python3 tools/sign_tag.py --tag {version}`",
+                )
 
         for _ in range(120):  # 120 * 30s = 1 hour
             builds = [run for run in github.action_runs(version, head_sha)]
@@ -755,7 +865,14 @@ def stage_sign_release_assets(config: Config, version: str) -> None:
                 s.ok("All release assets have been signed")
                 return
             s.progress(f"{len(assets)} release assets need signing")
-            raise assign_to_user(s, config.issue, "sign the assets")
+            raise assign_to_user(
+                s,
+                config,
+                version,
+                task="Binaries",
+                action="sign the assets",
+                instruction=f"Please sign the release assets: `python3 tools/sign_release_assets.py --tag {version}`",
+            )
 
         sign_release_assets.main(
             sign_release_assets.Config(upload=True, tag=version), []
@@ -789,7 +906,14 @@ def stage_publish_release(config: Config, version: str) -> None:
             return
         if config.github_actions:
             s.ok("Asking user to publish the release")
-            raise assign_to_user(s, config.issue, "publish the release")
+            raise assign_to_user(
+                s,
+                config,
+                version,
+                task="Publication",
+                action="publish the release",
+                instruction=f"All checks passed and assets signed. Please [publish the release](https://github.com/{github.repository()}/releases/tag/{version}) manually.",
+            )
         s.ok("Not implemented yet")
 
 
@@ -829,6 +953,8 @@ def run_stages(config: Config) -> None:
     stage_assign_milestone(config, version)
     stage_production_ready(config, version)
 
+    update_dashboard(config, version)
+
     if release_commit_message(version) not in git.log(config.main_branch):
         stage_branch(config, version)
         stage_gitignore()
@@ -837,6 +963,7 @@ def run_stages(config: Config) -> None:
         stage_commit(version)
         stage_push(config)
         stage_pull_request(config, version)
+        update_dashboard(config, version)
         stage_await_checks(config, version)
         if config.verify:
             # We're done for now. On CI, we're not allowed to mark the PR as
@@ -846,15 +973,19 @@ def run_stages(config: Config) -> None:
     else:
         print(f"Release branch {BRANCH_PREFIX}/{version} already merged.", flush=True)
     stage_await_merged(config, version)
+    update_dashboard(config, version)
     stage_await_master_build(config, version)
     stage_tag(config, version)
     stage_sign_tag(config, version)
+    update_dashboard(config, version)
     stage_build_binaries(config, version)
     stage_create_tarballs(version)
     stage_sign_release_assets(config, version)
+    update_dashboard(config, version)
     stage_verify_release_assets(version)
     stage_format_release_notes(config, version)
     stage_publish_release(config, version)
+    update_dashboard(config, version)
     stage_close_milestone(config, version)
     stage_close_issue(config)
 

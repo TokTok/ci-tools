@@ -8,14 +8,10 @@ import re
 import subprocess  # nosec
 import tomllib
 from dataclasses import dataclass
-from datetime import datetime
-from datetime import timezone
-from typing import Any
-from typing import Iterable
-from typing import Optional
+from datetime import datetime, timezone
+from typing import Any, Iterable, Optional
 
-from lib import changelog
-from lib import git
+from lib import changelog, git
 
 # b2215454e chore(windows): update copyright year
 # d44fc4dfe chore: Add script for syncing CHANGELOG.md to git tags.
@@ -31,7 +27,7 @@ COMMIT_REGEX = re.compile(
 #
 #     fixes: #5174
 LOG_REGEX = re.compile(
-    r"^(?P<sha>[0-9a-f]+)(?:\nMerge:(?: [0-9a-f]+)+)?\nAuthor: (?P<author>.+)\nDate:   (?P<date>.+)\n\n(?P<message>(?:.|\n)+)",
+    r"^(?P<sha>[0-9a-f]+)(?:\nMerge:(?: [0-9a-f]+)+)?(?:\nAuthor: (?P<author>.+))?(?:\nDate:   (?P<date>.+))?\n\n(?P<message>(?:.|\n)+)",
     re.MULTILINE,
 )
 
@@ -89,9 +85,7 @@ def read_clog_toml() -> dict[str, Any]:
 
 
 def parse_fork_config(data: list[dict[str, Any]]) -> list[ForkInfo]:
-    return [
-        ForkInfo(repository=d["repository"], since=d["since"]) for d in data
-    ]
+    return [ForkInfo(repository=d["repository"], since=d["since"]) for d in data]
 
 
 def parse_config(data: dict[str, Any]) -> Config:
@@ -99,8 +93,7 @@ def parse_config(data: dict[str, Any]) -> Config:
         changelog=data.get("clog", {})["changelog"],
         production=data.get("clog", {}).get("production", False),
         repository=data.get("clog", {}).get("repository", "http://localhost/"),
-        forked_from=parse_fork_config(
-            data.get("clog", {}).get("forked-from", {})),
+        forked_from=parse_fork_config(data.get("clog", {}).get("forked-from", {})),
         ignore_before=data.get("clog", {}).get("ignore-before", None),
     )
 
@@ -144,11 +137,13 @@ def parse_args() -> Config:
 
 
 def git_log(prev_tag: str, cur_tag: str) -> list[str]:
-    log = subprocess.check_output([  # nosec
-        "git",
-        "log",
-        f"{prev_tag}..{cur_tag}",
-    ])
+    log = subprocess.check_output(
+        [  # nosec
+            "git",
+            "log",
+            f"{prev_tag}..{cur_tag}",
+        ]
+    )
     return log.decode("utf-8").removeprefix("commit ").split("\ncommit ")
 
 
@@ -159,26 +154,28 @@ def git_tag_date(tag: str) -> str:
                 "git",
                 "rev-parse",
                 tag,
-            ]).decode("utf-8").strip())
+            ]
+        )
+        .decode("utf-8")
+        .strip()
+    )
     tag_data = subprocess.check_output(  # nosec
         [
             "git",
             "cat-file",
             "-p",
             tag_sha,
-        ]).decode("utf-8")
-    date_match = re.search(r"^Original tagger: .+ (\d{10})", tag_data,
-                           re.MULTILINE)
+        ]
+    ).decode("utf-8")
+    date_match = re.search(r"^Original tagger: .+ (\d{10})", tag_data, re.MULTILINE)
     if not date_match:
         date_match = re.search(r"^tagger .+ (\d{10})", tag_data, re.MULTILINE)
     if not date_match:
-        date_match = re.search(r"^committer .+ (\d{10})", tag_data,
-                               re.MULTILINE)
+        date_match = re.search(r"^committer .+ (\d{10})", tag_data, re.MULTILINE)
     if not date_match:
         raise Exception(f"Date not found for tag {tag}")
 
-    return datetime.fromtimestamp(int(
-        date_match.group(1))).strftime("%Y-%m-%d")
+    return datetime.fromtimestamp(int(date_match.group(1))).strftime("%Y-%m-%d")
 
 
 def today() -> str:
@@ -193,11 +190,13 @@ def unindent(text: str) -> str:
 
 def parse_closes(message: str) -> list[str]:
     return [
-        fix for fixes in re.findall(
+        fix
+        for fixes in re.findall(
             r"(?:closes|fix|fixe[ds]|resolve[ds]):?\s+((?:#\d+(?:,\s*)?)+)",
             message,
             re.IGNORECASE,
-        ) for fix in re.findall(r"#(\d+)", fixes)
+        )
+        for fix in re.findall(r"#(\d+)", fixes)
     ]
 
 
@@ -232,18 +231,19 @@ class LogParser:
             if not matches:
                 raise Exception(f"Failed to parse log entry: {entry}")
             sha = matches.group("sha")
-            self.repository = next_repo(self.repository,
-                                        self.config.forked_from, sha)
+            self.repository = next_repo(self.repository, self.config.forked_from, sha)
             author = matches.group("author")
             date = matches.group("date")
             split = unindent(matches.group("message")).split("\n\n", 1)
             first, rest = (split[0], "") if len(split) == 1 else split
-            if (first.startswith("Merge ") or first.startswith("Revert ")
-                    or first.startswith("Update ")):
+            if (
+                first.startswith("Merge ")
+                or first.startswith("Revert ")
+                or first.startswith("Update ")
+            ):
                 continue
             parsed = re.match(COMMIT_REGEX, normalize_space(first))
-            closes = tuple(
-                sorted(set(parse_closes(first) + parse_closes(rest))))
+            closes = tuple(sorted(set(parse_closes(first) + parse_closes(rest))))
             if parsed:
                 entries.append(
                     LogEntry(
@@ -253,7 +253,8 @@ class LogParser:
                         date=date,
                         closes=closes,
                         **parsed.groupdict(),
-                    ))
+                    )
+                )
             else:
                 entries.append(
                     LogEntry(
@@ -265,7 +266,8 @@ class LogParser:
                         module=None,
                         message=first,
                         closes=closes,
-                    ))
+                    )
+                )
         return entries
 
 
@@ -288,7 +290,8 @@ def group_by_message(entries: list[LogEntry]) -> dict[str, list[LogEntry]]:
 
 
 def preferred_case(
-    modules: Iterable[Optional[str]], ) -> dict[Optional[str], Optional[str]]:
+    modules: Iterable[Optional[str]],
+) -> dict[Optional[str], Optional[str]]:
     """Preferred case for module names is the one that has the most uppercase letters."""
     module_map: dict[Optional[str], Optional[str]] = {None: None}
     for module in modules:
@@ -304,8 +307,9 @@ def preferred_case(
             continue
 
         # We have it. If the new one has more uppercase letters, use it.
-        if sum(1 for c in module if c.isupper()) > sum(1 for c in current
-                                                       if c.isupper()):
+        if sum(1 for c in module if c.isupper()) > sum(
+            1 for c in current if c.isupper()
+        ):
             module_map[module.lower()] = module
     return module_map
 
@@ -320,10 +324,7 @@ def group_by_module(
         if module not in by_module:
             by_module[module] = []
         by_module[module].append(entry)
-    return {
-        module: group_by_message(entries)
-        for module, entries in by_module.items()
-    }
+    return {module: group_by_message(entries) for module, entries in by_module.items()}
 
 
 def format_closes(entry: LogEntry) -> str:
@@ -334,7 +335,8 @@ def format_closes(entry: LogEntry) -> str:
 
 
 MARKDOWN_REGEX = re.compile(
-    r"`[^`]+`|\*\*[^\*]+\*\*|\*[^\*]+\*|_[^_]+_|~[^~]+~|\S+|\s+")
+    r"`[^`]+`|\*\*[^\*]+\*\*|\*[^\*]+\*|_[^_]+_|~[^~]+~|\S+|\s+"
+)
 ITALIC_REGEX = re.compile(r"\*([^*]+)\*")
 BOLD_REGEX = re.compile(r"\*\*([^*]+)\*\*")
 
@@ -362,8 +364,7 @@ def escape(word: str) -> str:
 
 
 def format_message(entry: LogEntry) -> str:
-    return "".join(
-        escape(word) for word in re.findall(MARKDOWN_REGEX, entry.message))
+    return "".join(escape(word) for word in re.findall(MARKDOWN_REGEX, entry.message))
 
 
 def format_entry(entries: list[LogEntry]) -> str:
@@ -371,7 +372,8 @@ def format_entry(entries: list[LogEntry]) -> str:
         raise ValueError("No entries")
     shas = ", ".join(
         f"([{entry.sha[:8]}]({entry.repository}/commit/{entry.sha}){format_closes(entry)})"
-        for entry in entries)
+        for entry in entries
+    )
     return f"{format_message(entries[0])} {shas}"
 
 
@@ -420,8 +422,7 @@ def format_changelog(
         lines.append("")
         lines.append(f"#### {category_name(category)}")
         lines.append("")
-        for module, module_entries in sorted(entries.items(),
-                                             key=lambda x: x[0] or ""):
+        for module, module_entries in sorted(entries.items(), key=lambda x: x[0] or ""):
             if module is None:
                 for entry in module_entries.values():
                     lines.append(f"- {format_entry(entry)}")
@@ -474,14 +475,15 @@ def main(config: Optional[Config] = None) -> None:
     # Ignore everything before and including some tag.
     # (+1 because we still need {after tag}...{tag}).
     if config.ignore_before:
-        tags = tags[:tags.index((config.ignore_before, config.ignore_before)) +
-                    1]
+        tags = tags[: tags.index((config.ignore_before, config.ignore_before)) + 1]
     old_changelog = changelog.parse(config.changelog)
     parser = LogParser(config)
     text = "\n\n".join(
         filter_str(
             generate_changelog(old_changelog, parser, t[0], t[1])
-            for t in zip(tags, tags[1:])))
+            for t in zip(tags, tags[1:])
+        )
+    )
 
     if config.changelog:
         with open(config.changelog, "w") as f:

@@ -10,14 +10,17 @@ import subprocess  # nosec
 import tempfile
 import unittest
 from dataclasses import dataclass
-from typing import Any
-from typing import Optional
+from typing import Any, Optional
 
 from lib import git
 
-GIT_ROOT = git.root_dir()
-TOKTOK_ROOT = GIT_ROOT.parent
-DOWNLOAD_FILE_PATHS = TOKTOK_ROOT / "dockerfiles" / "qtox" / "download"
+
+def toktok_root() -> pathlib.Path:
+    return git.root_dir().parent
+
+
+def download_file_paths() -> pathlib.Path:
+    return toktok_root() / "dockerfiles" / "qtox" / "download"
 
 
 @dataclass
@@ -52,7 +55,7 @@ def parse_args() -> Config:
         "--download-files-path",
         help="Path to the dockerfiles/qtox/download directory",
         required=False,
-        default=DOWNLOAD_FILE_PATHS,
+        default=download_file_paths(),
     )
     parser.add_argument(
         "--git-tag",
@@ -86,18 +89,18 @@ def find_version(download_script_path: pathlib.Path) -> tuple[str, str]:
     """
     with open(download_script_path) as f:
         script_content = "".join(
-            re.sub(r"^source.*", PRINT_VERSION_SCRIPT, line)
-            for line in f.readlines())
+            re.sub(r"^source.*", PRINT_VERSION_SCRIPT, line) for line in f.readlines()
+        )
 
     # Run bash script in a sub-shell to extract the version
     version_output = subprocess.check_output(  # nosec
-        ["bash", "-c", script_content], ).decode()
+        ["bash", "-c", script_content],
+    ).decode()
 
     # Extract the version and hash from the output
     matches = re.match(r"URL: (.*)\nHASH: (.*)", version_output, re.MULTILINE)
     if matches is None:
-        raise ValueError(
-            "Failed to extract version and hash from download script")
+        raise ValueError("Failed to extract version and hash from download script")
 
     return matches.group(1), matches.group(2)
 
@@ -124,8 +127,7 @@ class FindVersionTest(unittest.TestCase):
             with open(sample_download_script_path, "w") as f:
                 f.write(sample_download_script)
 
-            self.assertEqual(find_version(sample_download_script_path),
-                             ("1.2.3", ":)"))
+            self.assertEqual(find_version(sample_download_script_path), ("1.2.3", ":)"))
 
 
 def load_flathub_manifest(flathub_manifest_path: str) -> Any:
@@ -138,8 +140,13 @@ def commit_from_tag(url: str, tag: str) -> str:
         output = subprocess.check_output(["git", "rev-parse", tag])  # nosec
         return output.decode().strip()
 
-    return (subprocess.check_output(  # nosec
-        ["git", "ls-remote", url, f"{tag}^{{}}"], ).split(b"\t")[0].decode())
+    return (
+        subprocess.check_output(  # nosec
+            ["git", "ls-remote", url, f"{tag}^{{}}"],
+        )
+        .split(b"\t")[0]
+        .decode()
+    )
 
 
 class CommitFromTagTest(unittest.TestCase):
@@ -147,7 +154,7 @@ class CommitFromTagTest(unittest.TestCase):
     def test_commit_from_tag(self) -> None:
         # Must be run in the qTox repository.
         self.assertEqual(
-            commit_from_tag(str(GIT_ROOT), "v1.17.3"),
+            commit_from_tag(str(git.root_dir()), "v1.17.3"),
             "c0e9a3b79609681e5b9f6bbf8f9a36cb1993dc5f",
         )
 
@@ -173,7 +180,7 @@ def update_git_source(module: dict[str, Any], tag: str) -> None:
 
 
 def find_manifest() -> Optional[pathlib.Path]:
-    for path in (GIT_ROOT / "platform" / "flatpak").rglob("*.json"):
+    for path in (git.root_dir() / "platform" / "flatpak").rglob("*.json"):
         return path
     return None
 
@@ -200,7 +207,7 @@ def main(config: Config) -> None:
     flathub_manifest = load_flathub_manifest(config.flathub_manifest_path)
 
     self_version = config.git_tag or git.current_tag()
-    self_name = _normalize(GIT_ROOT.name)
+    self_name = _normalize(git.root_dir().name)
     print("Using version", self_version, "for", self_name)
 
     download_files_dir = pathlib.Path(config.download_files_path)
@@ -216,8 +223,8 @@ def main(config: Config) -> None:
         else:
             filename = download_file_map.get(module_name, module_name)
             update_archive_source(
-                module,
-                find_version(download_files_dir / f"download_{filename}.sh"))
+                module, find_version(download_files_dir / f"download_{filename}.sh")
+            )
 
     orig = load_flathub_manifest(config.output_manifest_path)
     if json.dumps(flathub_manifest) != json.dumps(orig):

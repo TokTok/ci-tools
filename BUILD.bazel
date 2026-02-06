@@ -1,14 +1,62 @@
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//third_party/python:build_defs.bzl", "mypy_test")
 load("//tools/project:build_defs.bzl", "project")
 
 project(license = "gpl3-https")
+
+py_library(
+    name = "lib",
+    srcs = glob(["tools/lib/*.py"]),
+    imports = ["tools"],
+    visibility = ["//visibility:public"],
+    deps = [
+        "@requests",
+        "@typeshed//:requests",
+    ],
+)
+
+py_library(
+    name = "create_release_lib",
+    srcs = glob(
+        ["tools/*.py"],
+        exclude = ["tools/*_test.py"],
+    ),
+    imports = ["tools"],
+    deps = [
+        ":lib",
+    ],
+)
+
+py_test(
+    name = "github_test",
+    srcs = ["tools/lib/github_test.py"],
+    deps = [":lib"],
+)
+
+py_test(
+    name = "create_release_test",
+    srcs = ["tools/create_release_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "artifact_rename_test",
+    srcs = ["tools/artifact_rename_test.py"],
+    deps = [":create_release_lib"],
+)
+
+py_test(
+    name = "update_changelog_test",
+    srcs = ["tools/update_changelog_test.py"],
+    deps = [":create_release_lib"],
+)
 
 mypy_test(
     name = "mypy_test",
     srcs = glob(["**/*.py"]),
     path = [
         "external/typeshed/stubs/requests",
-        #"@typeshed//:stubs/requests/requests/__init__.pyi",
+        "@typeshed//:stubs/requests/requests/__init__.pyi",
     ],
     deps = ["@typeshed//:requests"],
 )
