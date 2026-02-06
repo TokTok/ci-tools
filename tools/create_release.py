@@ -399,7 +399,12 @@ class Releaser:
             s.ok(f"Added '{path.strip()}' to {gitignore}")
 
     def stage_validate(self) -> None:
-        validate_pr.main(validate_pr.Config(commit=not self.config.verify))
+        validate_pr.main(
+            validate_pr.Config(
+                commit=not self.config.verify,
+                release=self.config.production,
+            )
+        )
 
     def extract_issue_release_notes(self, body: str) -> str:
         """Extract the release notes from the issue body."""

@@ -9,17 +9,6 @@ Full release of ci-tools for testing the production release workflows.
 #### Bug Fixes
 
 - Improve release progress tracking and publication links. ([a00ac1b3](https://github.com/TokTok/ci-tools/commit/a00ac1b3848043c8da83a89b70e190dbd4929d58))
-
-<a name="v0.8.3-rc.1"></a>
-
-## v0.8.3-rc.1 (2026-02-06)
-
-### Release notes
-
-Some pre-release notes here.
-
-#### Bug Fixes
-
 - Don't crash the todo list update when there are no releases. ([34d2d3a9](https://github.com/TokTok/ci-tools/commit/34d2d3a967620c66a0dbe76205d35042f343209f))
 - Correct the path prefixes in release tarballs. ([f69e34f8](https://github.com/TokTok/ci-tools/commit/f69e34f8f54cffcc3b20176b8da4f9021a0797ac))
 - Add missing python dependencies in the slim image. ([299d574c](https://github.com/TokTok/ci-tools/commit/299d574c96e54645a4376a519ee2d3d696fba8e0))
@@ -73,18 +62,6 @@ Prod release for ci-tools.
 - Run release-soon on everything except push. ([8d52ffa9](https://github.com/TokTok/ci-tools/commit/8d52ffa94e12cc23075fde7d19ae86a10fa91c2b))
 - Don't run release-soon check on pushes, only pulls. ([138a61e8](https://github.com/TokTok/ci-tools/commit/138a61e8e66b874849a5e5d82c2607280376c664))
 - Output a zero-length file when changelog is empty. ([2337240f](https://github.com/TokTok/ci-tools/commit/2337240fb4840361a1c085b6c91476c3f9c27b43))
-- **Security:** Don't pass tokens to repo-local code. ([887ba6cf](https://github.com/TokTok/ci-tools/commit/887ba6cf826e0c43013d90e421047a85b17bd75a))
-
-<a name="v0.8.1-rc.1"></a>
-
-## v0.8.1-rc.1 (2025-02-16)
-
-### Release notes
-
-First release of ci-tools made by ci-tools releaser scripts. Release candidate first.
-
-#### Bug Fixes
-
 - Reviewable config was broken. ([73df8058](https://github.com/TokTok/ci-tools/commit/73df8058eaa6bb34a05411e50b27039447355dc5))
 - Forcibly trigger CI on automation pull requests. ([4bcdf84b](https://github.com/TokTok/ci-tools/commit/4bcdf84b4bbc9e23c3a5d9fb89cce3a50b8be373))
 - Fix self-name detection for real now. ([782a44c9](https://github.com/TokTok/ci-tools/commit/782a44c9cf025a042e6c301ea1bd55a412dc2616))
@@ -114,6 +91,7 @@ First release of ci-tools made by ci-tools releaser scripts. Release candidate f
 - Don't evaluate BUILD.bazel. ([cdc378fd](https://github.com/TokTok/ci-tools/commit/cdc378fd2bbcb636db0a331e03bf0585b2339ea4))
 - Fail the `hackage_upload` script on upload failure. ([0c2126d6](https://github.com/TokTok/ci-tools/commit/0c2126d6a22f551c6430def25d1da327ab628ecc))
 - Fix hackage upload URL for package candidates. ([563e21cd](https://github.com/TokTok/ci-tools/commit/563e21cdcf71f5719d370e21f880a5d89b9a4a52))
+- **Security:** Don't pass tokens to repo-local code. ([887ba6cf](https://github.com/TokTok/ci-tools/commit/887ba6cf826e0c43013d90e421047a85b17bd75a))
 
 #### Features
 

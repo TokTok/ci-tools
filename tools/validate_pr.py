@@ -288,7 +288,13 @@ def check_changelog(failures: list[str], config: Config) -> None:
     with stage.Stage(
         "Changelog", "The changelog should be up-to-date", failures
     ) as check:
-        update_changelog.main()
+        clog_config = update_changelog.parse_config(update_changelog.read_clog_toml())
+        if config.release:
+            clog_config.production = True
+        elif re.match(git.RELEASE_BRANCH_REGEX, github.head_ref()):
+            clog_config.production = "-rc." not in github.head_ref()
+
+        update_changelog.main(clog_config)
         if has_diff(config, "CHANGELOG.md"):
             if config.commit:
                 git.add("CHANGELOG.md")

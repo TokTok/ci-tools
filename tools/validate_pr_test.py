@@ -1,9 +1,52 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright © 2026 The TokTok team
 import unittest
+import unittest.mock
 
-from validate_pr import (parse_toxcore_version, parse_version_diff,
-                         parse_weblate_prs)
+from validate_pr import (Config, check_changelog, parse_toxcore_version,
+                         parse_version_diff, parse_weblate_prs)
+
+
+class TestCheckChangelog(unittest.TestCase):
+    @unittest.mock.patch("update_changelog.main")
+    @unittest.mock.patch("update_changelog.read_clog_toml", return_value={})
+    @unittest.mock.patch("update_changelog.parse_config")
+    @unittest.mock.patch("validate_pr.github.head_ref")
+    @unittest.mock.patch("validate_pr.has_diff", return_value=False)
+    @unittest.mock.patch("validate_pr.stage.Stage")
+    def test_check_changelog_production(
+        self,
+        mock_stage: unittest.mock.MagicMock,
+        mock_has_diff: unittest.mock.MagicMock,
+        mock_head_ref: unittest.mock.MagicMock,
+        mock_parse_config: unittest.mock.MagicMock,
+        mock_read_clog_toml: unittest.mock.MagicMock,
+        mock_clog_main: unittest.mock.MagicMock,
+    ) -> None:
+        clog_config = unittest.mock.MagicMock()
+        clog_config.production = False
+        mock_parse_config.return_value = clog_config
+
+        # 1. Release config set to True
+        mock_head_ref.return_value = "some-branch"
+        config = Config(commit=False, release=True)
+        check_changelog([], config)
+        self.assertTrue(clog_config.production)
+        mock_clog_main.assert_called_with(clog_config)
+
+        # 2. Release config False, but branch is a production release branch
+        clog_config.production = False
+        mock_head_ref.return_value = "release/v1.0.0"
+        config = Config(commit=False, release=False)
+        check_changelog([], config)
+        self.assertTrue(clog_config.production)
+
+        # 3. Release config False, branch is an RC release branch
+        clog_config.production = False
+        mock_head_ref.return_value = "release/v1.0.0-rc.1"
+        config = Config(commit=False, release=False)
+        check_changelog([], config)
+        self.assertFalse(clog_config.production)
 
 
 class TestValidatePRLogic(unittest.TestCase):

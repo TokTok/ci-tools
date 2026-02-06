@@ -149,15 +149,21 @@ class Git:
 
     def release_tags(self, with_rc: bool = True) -> list[str]:
         tags = self._run_output(["tag", "--merged"]).splitlines()
-        return sorted(
-            (
-                tag
-                for tag in tags
-                if re.match(VERSION_REGEX, tag) and (with_rc or "-rc." not in tag)
-            ),
+        all_tags = sorted(
+            (tag for tag in tags if re.match(VERSION_REGEX, tag)),
             reverse=True,
             key=parse_version,
         )
+
+        if not with_rc:
+            return [t for t in all_tags if "-rc." not in t]
+
+        prod_versions = {t for t in all_tags if "-rc." not in t}
+        return [
+            t
+            for t in all_tags
+            if "-rc." not in t or t.split("-rc.")[0] not in prod_versions
+        ]
 
     def release_tag_exists(self, tag: str) -> bool:
         """Check if a tag exists."""
