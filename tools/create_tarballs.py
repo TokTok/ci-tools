@@ -58,7 +58,10 @@ def create_tarballs(project_name: str, tag: str, tmpdir: str) -> None:
             ],
             check=True,
         )
-        subprocess.run([prog, "-f", tarname], check=True)  # nosec
+        if prog == "gzip":
+            subprocess.run([prog, "-nf", tarname], check=True)  # nosec
+        else:
+            subprocess.run([prog, "-f", tarname], check=True)  # nosec
 
 
 def upload_tarballs(tag: str, tmpdir: str) -> None:

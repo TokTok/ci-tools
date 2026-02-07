@@ -56,7 +56,7 @@ class TestCreateTarballs(unittest.TestCase):
                 check=True,
             )
             mock_run.assert_any_call(
-                ["gzip", "-f", "/tmp/dir/v1.0.0.tar"], check=True  # nosec
+                ["gzip", "-nf", "/tmp/dir/v1.0.0.tar"], check=True  # nosec
             )
 
 
