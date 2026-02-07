@@ -776,6 +776,26 @@ class TestReleaseE2E(unittest.TestCase):
 
             self.assertIn("Timeout waiting for checks to pass", str(cm.exception))
 
+    def test_stage_release_notes_eventual_consistency(self) -> None:
+        """Verify that stage_release_notes works even if GitHub search is slow."""
+        config = self.make_config(issue=3015, version="v0.2.22")
+        gh = FakeGitHub()
+        gh.add_issue(
+            3015,
+            "Release tracking issue: v0.2.22",
+            "### Release notes\nSome notes\nProduction release",
+            milestone=51,
+        )
+        gh.add_milestone(51, "v0.2.22")
+
+        gt = FakeGit()
+        releaser = Releaser(config, gt, gh)
+
+        with self.release_mocks(gh, gt):
+            # Simulate eventual consistency: searching the milestone returns nothing
+            with patch.object(gh, "open_milestone_issues", return_value=[]):
+                releaser.stage_release_notes("v0.2.22")
+
 
 if __name__ == "__main__":
     unittest.main()

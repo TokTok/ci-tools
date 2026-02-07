@@ -420,20 +420,23 @@ class Releaser:
             if self.config.resume and changelog.has_release_notes(version):
                 s.ok("Skipping")
             elif self.config.github_actions:
-                m = self.github.next_milestone()
-                tracking_issue = [
-                    issue
-                    for issue in self.github.open_milestone_issues(m.number)
-                    if "toktok-releaser" in issue.assignees
-                ]
-                if not tracking_issue:
-                    raise s.fail("No tracking issue found")
-                if len(tracking_issue) > 1:
-                    raise s.fail(
-                        "Multiple tracking issues found: "
-                        f"{', '.join(i.html_url for i in tracking_issue)}"
-                    )
-                issue = tracking_issue[0]
+                if self.config.issue:
+                    issue = self.github.get_issue(self.config.issue)
+                else:
+                    m = self.github.next_milestone()
+                    tracking_issue = [
+                        issue
+                        for issue in self.github.open_milestone_issues(m.number)
+                        if "toktok-releaser" in issue.assignees
+                    ]
+                    if not tracking_issue:
+                        raise s.fail("No tracking issue found")
+                    if len(tracking_issue) > 1:
+                        raise s.fail(
+                            "Multiple tracking issues found: "
+                            f"{', '.join(i.html_url for i in tracking_issue)}"
+                        )
+                    issue = tracking_issue[0]
                 notes = self.extract_issue_release_notes(issue.body)
                 if not notes:
                     raise s.fail("No release notes found in issue body")
