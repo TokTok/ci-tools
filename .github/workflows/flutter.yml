@@ -12,9 +12,9 @@ on:
         type: string
         default: "stable"
       flutter-version:
-        description: 'Flutter version to use (e.g. 3.29.0)'
+        description: 'Flutter version to use (e.g. 3.38.9)'
         type: string
-        default: "3.29.0"
+        default: "3.38.9"
     secrets:
       CODECOV_TOKEN:
         description: 'Token for Codecov (required only for master builds)'
@@ -32,8 +32,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: "stable"
-          # Formatter changed in 3.29. We're not ready yet.
-          flutter-version: "3.27.4"
+          flutter-version: ${{ inputs.flutter-version }}
           cache: true
       - name: Run formatter
         run: dart format . && git diff --exit-code
