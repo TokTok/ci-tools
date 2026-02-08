@@ -2,11 +2,9 @@
 import ast
 import os
 import re
-import subprocess
+import subprocess  # nosec
 import sys
-from typing import cast
-from typing import List
-from typing import Optional
+from typing import List, Optional, cast
 
 import requests
 
@@ -15,10 +13,14 @@ def github_repo() -> str:
     repo = os.environ.get("GITHUB_REPOSITORY")
     if repo:
         return repo
-    return (subprocess.run(
-        ["git", "remote", "get-url", "upstream"],
-        check=True,
-        capture_output=True).stdout.decode("utf-8").strip().split(":")[1])
+    return (
+        subprocess.run(
+            ["git", "remote", "get-url", "upstream"], check=True, capture_output=True
+        )
+        .stdout.decode("utf-8")
+        .strip()
+        .split(":")[1]
+    )
 
 
 def release_github() -> Optional[str]:
@@ -72,9 +74,12 @@ def release_milestone() -> str:
         sys.exit(1)
 
     return print_semver(
-        sorted(v for v in tuple(
-            parse_semver(cast(str, ms["title"])) for ms in milestones)
-               if v)[0])
+        sorted(
+            v
+            for v in tuple(parse_semver(cast(str, ms["title"])) for ms in milestones)
+            if v
+        )[0]
+    )
 
 
 def release_pr_milestone() -> Optional[str]:
@@ -98,14 +103,18 @@ def release_local(path: str) -> tuple[Optional[str], str, bool]:
     with open(os.path.join(path, "BUILD.bazel"), "r") as fh:
         bzl = ast.parse(fh.read(), filename=path)
         for stmt in bzl.body:
-            if (isinstance(stmt, ast.Expr)
-                    and isinstance(stmt.value, ast.Call)
-                    and isinstance(stmt.value.func, ast.Name)
-                    and stmt.value.func.id == "haskell_library"):
+            if (
+                isinstance(stmt, ast.Expr)
+                and isinstance(stmt.value, ast.Call)
+                and isinstance(stmt.value.func, ast.Name)
+                and stmt.value.func.id == "haskell_library"
+            ):
                 for arg in stmt.value.keywords:
-                    if (arg.arg == "version"
-                            and isinstance(arg.value, ast.Constant)
-                            and isinstance(arg.value.s, str)):
+                    if (
+                        arg.arg == "version"
+                        and isinstance(arg.value, ast.Constant)
+                        and isinstance(arg.value.s, str)
+                    ):
                         return arg.value.s, "BUILD.bazel", True
 
     if os.path.exists(os.path.join(path, "configure.ac")):
@@ -147,24 +156,34 @@ def main(prog: str, args: List[str]) -> None:
     print(f"Local release: {local_release} ({local_origin})")
 
     if local_required and gh_release and gh_release != local_release:
-        print(f"\nFAIL: GitHub draft release {gh_release} does not match "
-              f"{local_origin} {local_release}")
+        print(
+            f"\nFAIL: GitHub draft release {gh_release} does not match "
+            f"{local_origin} {local_release}"
+        )
         sys.exit(1)
     if local_required and ms_release != local_release:
-        print(f"\nFAIL: Next GitHub Milestone release {ms_release} does not "
-              f"match {local_origin} {local_release}")
+        print(
+            f"\nFAIL: Next GitHub Milestone release {ms_release} does not "
+            f"match {local_origin} {local_release}"
+        )
         sys.exit(1)
     if local_required and pr_release and pr_release != local_release:
-        print(f"\nFAIL: PR milestone {pr_release} does not match "
-              f"{local_origin} {local_release}")
+        print(
+            f"\nFAIL: PR milestone {pr_release} does not match "
+            f"{local_origin} {local_release}"
+        )
         sys.exit(1)
     if gh_release and gh_release != ms_release:
-        print(f"\nFAIL: GitHub draft release {gh_release} does not match "
-              f"next GitHub Milestone release {ms_release}")
+        print(
+            f"\nFAIL: GitHub draft release {gh_release} does not match "
+            f"next GitHub Milestone release {ms_release}"
+        )
         sys.exit(1)
     if pr_release and pr_release != ms_release:
-        print(f"\nFAIL: PR milestone {pr_release} does not match "
-              f"next GitHub Milestone release {ms_release}")
+        print(
+            f"\nFAIL: PR milestone {pr_release} does not match "
+            f"next GitHub Milestone release {ms_release}"
+        )
         sys.exit(1)
 
     print(f"\nPASS: Upcoming release version is {gh_release}")
