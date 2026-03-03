@@ -530,9 +530,11 @@ class Releaser:
 
     def has_tarballs(self, version: str) -> bool:
         """Check if there are tarball assets for the given version."""
+        project_name = self.github.repository_name()
+        bare_version = version[1:] if version.startswith("v") else version
         assets = self.github.release_assets(version)
         return all(
-            any(a.name == f"{version}.tar.{ext}" for a in assets)
+            any(a.name == f"{project_name}-{bare_version}.tar.{ext}" for a in assets)
             for ext in ("gz", "xz")
         )
 

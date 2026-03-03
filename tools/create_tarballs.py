@@ -42,17 +42,23 @@ def parse_args() -> Config:
     return Config(**vars(args))
 
 
+def _strip_v(tag: str) -> str:
+    """Strip leading 'v' from a tag to get the bare version number."""
+    return tag[1:] if tag.startswith("v") else tag
+
+
 def create_tarballs(project_name: str, tag: str, tmpdir: str) -> None:
     """Create source tarballs with both .gz and .xz for the given tag."""
+    version = _strip_v(tag)
     for prog in ("gzip", "xz"):
-        tarname = f"{os.path.join(tmpdir, tag)}.tar"
+        tarname = f"{os.path.join(tmpdir, project_name)}-{version}.tar"
         print(f"Creating {prog} tarball for {tag}")
         subprocess.run(  # nosec
             [
                 "git",
                 "archive",
                 "--format=tar",
-                f"--prefix={project_name}-{tag}/",
+                f"--prefix={project_name}-{version}/",
                 tag,
                 f"--output={tarname}",
             ],
@@ -64,14 +70,15 @@ def create_tarballs(project_name: str, tag: str, tmpdir: str) -> None:
             subprocess.run([prog, "-f", tarname], check=True)  # nosec
 
 
-def upload_tarballs(tag: str, tmpdir: str) -> None:
+def upload_tarballs(project_name: str, tag: str, tmpdir: str) -> None:
     """Upload the tarballs to GitHub."""
+    version = _strip_v(tag)
     content_type = {
         "gz": "application/gzip",
         "xz": "application/x-xz",
     }
     for ext in ("gz", "xz"):
-        filename = f"{tag}.tar.{ext}"
+        filename = f"{project_name}-{version}.tar.{ext}"
         print(f"Uploading {filename} to GitHub release {tag}")
         with open(os.path.join(tmpdir, filename), "rb") as f:
             github.upload_asset(tag, filename, content_type[ext], f)
@@ -81,7 +88,7 @@ def main(config: Config) -> None:
     if config.upload:
         with tempfile.TemporaryDirectory() as tmpdir:
             create_tarballs(config.project_name, config.tag, tmpdir)
-            upload_tarballs(config.tag, tmpdir)
+            upload_tarballs(config.project_name, config.tag, tmpdir)
     else:
         create_tarballs(config.project_name, config.tag, ".")
 

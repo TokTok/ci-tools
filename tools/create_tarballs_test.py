@@ -26,7 +26,7 @@ class TestCreateTarballs(unittest.TestCase):
         mock_tmp.return_value.__enter__.return_value = "/tmp/dir"  # nosec
         main(self.config)
         mock_create.assert_called_once_with("ci-tools", "v1.0.0", "/tmp/dir")  # nosec
-        mock_upload.assert_called_once_with("v1.0.0", "/tmp/dir")  # nosec
+        mock_upload.assert_called_once_with("ci-tools", "v1.0.0", "/tmp/dir")  # nosec
 
     @patch("subprocess.run")
     @patch("create_tarballs.os.path.join")
@@ -49,14 +49,14 @@ class TestCreateTarballs(unittest.TestCase):
                     "git",
                     "archive",
                     "--format=tar",
-                    "--prefix=ci-tools-v1.0.0/",
+                    "--prefix=ci-tools-1.0.0/",
                     "v1.0.0",
-                    "--output=/tmp/dir/v1.0.0.tar",  # nosec
+                    "--output=/tmp/dir/ci-tools-1.0.0.tar",  # nosec
                 ],
                 check=True,
             )
             mock_run.assert_any_call(
-                ["gzip", "-nf", "/tmp/dir/v1.0.0.tar"], check=True  # nosec
+                ["gzip", "-nf", "/tmp/dir/ci-tools-1.0.0.tar"], check=True  # nosec
             )
 
 
