@@ -94,6 +94,7 @@ ccache --zero-stats
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOS_VERSION" \
   -DCMAKE_PREFIX_PATH="$PREFIX_PATH" \
+  -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
   -GNinja \
   -B_build \
   "$@" \
