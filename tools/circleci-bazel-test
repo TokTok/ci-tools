@@ -52,7 +52,7 @@ TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
 pushd /src/workspace
-curl -L https://github.com/buchgr/bazel-remote/releases/download/v2.5.0/bazel-remote-2.5.0-linux-x86_64 -o "$TMPDIR/bazel-remote"
+curl -L https://github.com/buchgr/bazel-remote/releases/download/v2.6.1/bazel-remote-2.6.1-linux-amd64 -o "$TMPDIR/bazel-remote"
 # TODO(iphydf): Use bazel once the image is updated.
 # bazel run @patchelf//:patchelf -- --set-interpreter /nix/store/*-glibc-*/lib64/ld-linux-x86-64.so.2 "$TMPDIR/bazel-remote"
 "$PATCHELF" --set-interpreter /nix/store/*-glibc-*/lib64/ld-linux-x86-64.so.2 "$TMPDIR/bazel-remote"
