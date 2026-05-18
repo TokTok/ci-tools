@@ -764,7 +764,7 @@ class Releaser:
                     for run in self.github.action_runs(
                         self.config.main_branch, head_sha
                     )
-                    if run.event != "issues"
+                    if run.event != "issues" and run.event != "schedule"
                 ]
                 if not builds:
                     s.progress(
