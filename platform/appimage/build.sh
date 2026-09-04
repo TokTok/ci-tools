@@ -14,7 +14,7 @@ git config --global --add safe.directory '*'
 umask 022
 
 # Support reproducible builds
-if [ -z "${SOURCE_DATE_EPOCH:-}" ]; then
+if [ "${SOURCE_DATE_EPOCH:-}" = "" ]; then
   export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
 fi
 
@@ -53,19 +53,19 @@ while (($# > 0)); do
   esac
 done
 
-if [ -z "${ARCH+x}" ]; then
+if [ "${ARCH+x}" = "" ]; then
   echo "--arch is a required argument"
   usage
   exit 1
 fi
 
-if [ -z "${SRC_DIR+x}" ]; then
+if [ "${SRC_DIR+x}" = "" ]; then
   echo "--src-dir is a required argument"
   usage
   exit 1
 fi
 
-if [ -z "${PROJECT_NAME+x}" ]; then
+if [ "${PROJECT_NAME+x}" = "" ]; then
   echo "--project-name is a required argument"
   usage
   exit 1
@@ -79,7 +79,7 @@ readonly BUILD_DIR="$(realpath .)"
 readonly PROJECT_APP_DIR="$BUILD_DIR/$PROJECT_NAME.AppDir"
 
 # Pin appimagetool version for reproducibility
-readonly APPIMAGE_TOOL_VERSION="947"
+readonly APPIMAGE_TOOL_VERSION="951"
 readonly APPIMAGE_TOOL_URL="https://github.com/probonopd/go-appimage/releases/download/continuous/appimagetool-$APPIMAGE_TOOL_VERSION-x86_64.AppImage"
 
 rm -f appimagetool-*.AppImage
