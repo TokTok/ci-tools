@@ -108,6 +108,7 @@ _BAIDU_LANGUAGES = ("jbo",)
 _IGNORE_LANGUAGES = ("pr", "nl_BE", "sr_Latn")
 
 _LOCK = multiprocessing.Lock()
+_GOOGLE_LOCK = multiprocessing.Lock()
 
 
 @memoize
@@ -237,7 +238,7 @@ def _request_with_retry(
     sleep_time = 0.5
     for _ in range(retries):
         # Handle the service throttling.
-        if response.status_code == 429:
+        if response.status_code == 429 or response.status_code == 500:
             time.sleep(sleep_time)
             sleep_time += 0.5
             response = requests.request(method, url, params=params, json=json)
@@ -314,17 +315,18 @@ def _translate(lang: Language, current: int, total: int, text: str) -> str:
         return ""
     if lang.weblate_code in _BAIDU_LANGUAGES:
         return _fix_translation(lang, text, _baidu_translate(lang, text))
-    response = _request_with_retry(
-        method="GET",
-        url="https://translate.googleapis.com/translate_a/single",
-        params={
-            "client": "gtx",
-            "sl": "en",
-            "tl": lang.google_code,
-            "dt": "t",
-            "q": text.replace("\n", " "),
-        },
-    )
+    with _GOOGLE_LOCK:
+        response = _request_with_retry(
+            method="GET",
+            url="https://translate.googleapis.com/translate_a/single",
+            params={
+                "client": "gtx",
+                "sl": "en",
+                "tl": lang.google_code,
+                "dt": "t",
+                "q": text.replace("\n", " "),
+            },
+        )
     response.raise_for_status()
     return _fix_translation(
         lang, text, _reflow(text, "".join([x[0] for x in response.json()[0]]))
