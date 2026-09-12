@@ -22,4 +22,4 @@ jobs:
         run: pip install mypy types-requests
       - name: Run mypy
         run: (find . -name "*.py"; grep -lR '^#!.*python') |
-          xargs -n1 -P8 mypy --strict
+          xargs -n1 -P8 mypy --strict --cache-dir /dev/null
