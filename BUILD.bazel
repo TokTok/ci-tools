@@ -143,6 +143,7 @@ py_test(
 
 mypy_test(
     name = "mypy_test",
+    size = "large",
     srcs = glob(["**/*.py"]),
     path = [
         "external/typeshed/stubs/requests",
