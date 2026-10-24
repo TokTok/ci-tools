@@ -1,0 +1,34 @@
+name: restyler-mirror
+
+on:
+  workflow_dispatch:
+
+permissions:
+  packages: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    env:
+      SRC: public.ecr.aws/restyled-io
+      DST: ghcr.io/toktok
+    steps:
+      - name: Log in to GHCR
+        run: echo '${{ github.token }}' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin
+      - name: Mirror images
+        run: |
+          set -eu
+          for img in \
+            restyler-astyle:v3.6.2 \
+            restyler-autopep8:v2.3.2 \
+            restyler-black:v26.10.1 \
+            restyler-clang-format:v16.0.6 \
+            restyler-prettier:v3.9.10-6 \
+            restyler-reorder-python-imports:v3.19.0 \
+            restyler-shellharden:v4.3.2 \
+            restyler-shfmt:v3.14.1 \
+            restyler-yapf:v0.43.0-1; do
+            for i in 1 2 3 4 5; do docker pull "$SRC/$img" && break; sleep 15; done
+            docker tag "$SRC/$img" "$DST/$img"
+            docker push "$DST/$img"
+          done
