@@ -27,6 +27,7 @@ jobs:
             restyler-reorder-python-imports:v3.19.0 \
             restyler-shellharden:v4.3.2 \
             restyler-shfmt:v3.14.1 \
+            restyler-stylish-haskell:v0.14.3.0 \
             restyler-yapf:v0.43.0-1; do
             for i in 1 2 3 4 5; do docker pull "$SRC/$img" && break; sleep 15; done
             docker tag "$SRC/$img" "$DST/$img"
