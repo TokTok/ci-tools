@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       project-name:
-        description: 'Name of the application to build (e.g. qTox).'
+        description: "Name of the application to build (e.g. qTox)."
         required: false
         type: string
       cmake-args:
-        description: 'Arguments to pass to CMake.'
+        description: "Arguments to pass to CMake."
         required: false
         type: string
       need-qt:
@@ -29,17 +29,17 @@ jobs:
         exclude:
           - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'iphonesimulator-x86_64' }}
           - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'iphonesimulator-arm64' }}
-    runs-on: macos-14
+    runs-on: macos-26
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
           submodules: true
       - name: Checkout ci-tools
         if: github.repository != 'TokTok/ci-tools'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: TokTok/ci-tools
           path: third_party/ci-tools
@@ -48,7 +48,7 @@ jobs:
         if: github.repository == 'TokTok/ci-tools'
         run: ln -s .. third_party/ci-tools
       - name: Checkout dockerfiles
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: TokTok/dockerfiles
           path: third_party/dockerfiles
@@ -81,7 +81,7 @@ jobs:
             --dep-prefix /Users/runner/work/host-qt
       - name: Cache dependencies (except Qt)
         id: cache-deps
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /Users/runner/work/deps/bin
@@ -98,7 +98,7 @@ jobs:
           --dep-file platform/deps.depfile
           --dep-prefix /Users/runner/work/deps
       - name: Cache compiler output
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .cache/ccache
           key: ${{ github.job }}-ios-distributable-${{ matrix.arch }}-${{ matrix.ios }}-ccache
@@ -117,7 +117,7 @@ jobs:
           ${{ inputs.cmake-args }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.artifact.outputs.artifact-ref }}
           path: |

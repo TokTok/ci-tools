@@ -248,7 +248,7 @@ jobs:
 
   macos-build:
     name: macOS build
-    runs-on: macos-14
+    runs-on: macos-26
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -285,7 +285,7 @@ jobs:
   macos-test:
     name: macOS screenshot
     needs: [macos-build]
-    runs-on: macos-14
+    runs-on: macos-26
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v7

@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       project-name:
-        description: 'Name of the application to build (e.g. qTox).'
+        description: "Name of the application to build (e.g. qTox)."
         required: false
         type: string
       cmake-args:
-        description: 'Arguments to pass to CMake.'
+        description: "Arguments to pass to CMake."
         required: false
         type: string
       need-qt:
@@ -27,7 +27,7 @@ on:
         required: false
         type: boolean
       smoke-test:
-        description: 'Command to run to smoke test the AppImage.'
+        description: "Command to run to smoke test the AppImage."
         required: true
         type: string
       test-files:
@@ -39,13 +39,13 @@ on:
         type: string
     secrets:
       APPLE_BUILD_CERTIFICATE_BASE64:
-        description: 'Base64-encoded Apple build certificate.'
+        description: "Base64-encoded Apple build certificate."
         required: false
       APPLE_KEYCHAIN_PASSWORD:
-        description: 'Password for the Apple keychain.'
+        description: "Password for the Apple keychain."
         required: false
       APPLE_P12_PASSWORD:
-        description: 'Password for the Apple P12 certificate.'
+        description: "Password for the Apple P12 certificate."
         required: false
 
 jobs:
@@ -58,7 +58,7 @@ jobs:
         exclude:
           - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'x86_64' }}
           - macos: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '12.0' }}
-    runs-on: ${{ matrix.arch == 'arm64' && 'macos-14' || 'macos-15-intel' }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'macos-26' || 'macos-15-intel' }}
     permissions:
       contents: write
     steps:
@@ -201,7 +201,7 @@ jobs:
         exclude:
           - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'x86_64' }}
           - macos: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '12.0' }}
-    runs-on: ${{ matrix.arch == 'arm64' && 'macos-14' || 'macos-15-intel' }}
+    runs-on: ${{ matrix.arch == 'arm64' && 'macos-26' || 'macos-15-intel' }}
     permissions:
       contents: write
     steps:

@@ -1,0 +1,53 @@
+#!/bin/sh
+
+# Copies the restyler images our .restyled.yaml files pin from where restyled
+# publishes them to ghcr.io/toktok, as ECR Public rate-limits the shared IPs
+# CI pulls from. Needs `docker login ghcr.io` with write access to packages.
+
+set -eu
+
+ECR=public.ecr.aws/restyled-io
+DST="${DST:-ghcr.io/toktok}"
+
+owner="${DST#*/}"
+# Settings pages of the packages pushed.
+pushed=""
+
+# Each under its own name and tag in DST. Those already there aren't pulled
+# again: ECR blocks after a few pulls.
+for src in \
+  "$ECR/restyler-astyle:v3.6.2" \
+  "$ECR/restyler-autopep8:v2.3.2" \
+  "$ECR/restyler-black:v26.10.1" \
+  "$ECR/restyler-clang-format:v16.0.6" \
+  "$ECR/restyler-clang-format:v18.1.8" \
+  "$ECR/restyler-dart-format:v3.1.13" \
+  "$ECR/restyler-prettier:v3.9.10-6" \
+  "$ECR/restyler-reorder-python-imports:v3.19.0" \
+  "$ECR/restyler-shellcheck:v0.11.0" \
+  "$ECR/restyler-shellharden:v4.3.2" \
+  "$ECR/restyler-shfmt:v3.14.1" \
+  "$ECR/restyler-stylish-haskell:v0.14.3.0" \
+  "$ECR/restyler-yapf:v0.43.0-1" \
+  docker.io/restyled/restyler-whitespace:v0.2.0.5; do
+  dst="$DST/${src##*/}"
+  if docker manifest inspect "$dst" >/dev/null 2>&1; then
+    echo "Already mirrored: $dst"
+    continue
+  fi
+  for _ in 1 2 3 4 5; do
+    docker pull "$src" && break
+    sleep 15
+  done
+  docker tag "$src" "$dst"
+  docker push "$dst"
+  name="${dst##*/}"
+  pushed="$pushed
+  https://github.com/orgs/$owner/packages/container/${name%%:*}/settings"
+done
+
+# A new package is private, which restyled can't pull.
+if [ "$pushed" != "" ]; then
+  echo
+  echo "Make these public, unless they already are (Danger Zone, Change visibility):$pushed"
+fi
