@@ -19,6 +19,8 @@ restylers:
       image: ghcr.io/toktok/restyler-prettier:v3.9.10-6
   - prettier-yaml:
       image: ghcr.io/toktok/restyler-prettier:v3.9.10-6
+  - shellcheck:
+      image: ghcr.io/toktok/restyler-shellcheck:v0.11.0
   - shellharden:
       image: ghcr.io/toktok/restyler-shellharden:v4.3.2
   - shfmt:

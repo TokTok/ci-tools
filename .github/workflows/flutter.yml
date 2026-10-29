@@ -365,8 +365,18 @@ jobs:
           name: ${{ inputs.project-name }}-windows-x64.tar.gz
       - name: Extract artifact
         run: tar -zxf ${{ inputs.project-name }}-windows-x64.tar.gz
+      # An app that inherits the step's output keeps it open, and the runner
+      # kills it 5 seconds after the shell exits. Start-Process passes no
+      # handles, unless told to redirect.
       - name: Run ${{ inputs.project-name }}
-        run: ./${{ inputs.project-name }}.exe
+        run: |
+          $app = Start-Process ./${{ inputs.project-name }}.exe -PassThru
+          for ($i = 0; $i -lt 120 -and $app.MainWindowHandle -eq 0 -and -not $app.HasExited; $i++) {
+            Start-Sleep 1
+            $app.Refresh()
+          }
+          Start-Sleep 5
+          if ($app.HasExited) { exit 1 }
       - name: Download nircmd
         run: curl -L https://www.nirsoft.net/utils/nircmd-x64.zip -o nircmd-x64.zip && unzip nircmd-x64.zip
       - name: Take a screenshot

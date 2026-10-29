@@ -8,6 +8,13 @@ jobs:
   common:
     uses: ./.github/workflows/common-ci.yml
 
+  flutter:
+    uses: ./.github/workflows/flutter.yml
+    with:
+      project-name: hello
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
   mypy:
     runs-on: ubuntu-slim
     steps:
