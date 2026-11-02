@@ -4,15 +4,15 @@ on:
   workflow_call:
     inputs:
       project-name:
-        description: 'Name of the application to build (e.g. btox)'
+        description: "Name of the application to build (e.g. btox)"
         required: true
         type: string
       flutter-channel:
-        description: 'Flutter channel to use (e.g. stable, beta, dev)'
+        description: "Flutter channel to use (e.g. stable, beta, dev)"
         type: string
         default: "stable"
       flutter-version:
-        description: 'Flutter version to use (e.g. 3.38.9)'
+        description: "Flutter version to use (e.g. 3.38.9)"
         type: string
         default: "3.38.9"
 
@@ -44,7 +44,7 @@ jobs:
           flutter build web --base-href "/${{ inputs.project-name }}/"
 
       - name: Set-up Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
@@ -53,4 +53,4 @@ jobs:
 
       - name: Deploy GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
