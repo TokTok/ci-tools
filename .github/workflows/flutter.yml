@@ -19,6 +19,12 @@ on:
       CODECOV_TOKEN:
         description: "Token for Codecov (required only for master builds)"
         required: true
+      ANDROID_KEYSTORE:
+        description: 'Base64 PKCS12 keystore whose key "release" signs the APK, so each build installs over the last (debug key without it)'
+        required: false
+      ANDROID_KEYSTORE_PASSWORD:
+        description: "Password of ANDROID_KEYSTORE and its key"
+        required: false
 
 jobs:
   format:
@@ -104,6 +110,17 @@ jobs:
           cache: true
       - name: Generate files
         run: ./tools/prepare
+      - name: Set up the release key
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE" ]; then
+            echo "$ANDROID_KEYSTORE" | base64 -d > "$RUNNER_TEMP/release.p12"
+            printf 'storeFile=%s\nstorePassword=%s\nkeyPassword=%s\nkeyAlias=release\n' \
+              "$RUNNER_TEMP/release.p12" "$ANDROID_KEYSTORE_PASSWORD" "$ANDROID_KEYSTORE_PASSWORD" \
+              > android/key.properties
+          fi
       - name: Build Flutter app
         run: flutter build apk
       - name: Copy release APK to ${{ inputs.project-name }}-android.apk
