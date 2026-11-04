@@ -6,11 +6,11 @@ on:
       ghc-version:
         required: false
         type: string
-        default: "8.10.3"
+        default: "9.8.4"
       cabal-version:
         required: false
         type: string
-        default: "3.4"
+        default: "3.16"
     secrets:
       API_TOKEN_HACKAGE:
         required: true
