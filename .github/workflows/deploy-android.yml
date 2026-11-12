@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       project-name:
-        description: 'Name of the application to build (e.g. qTox)'
+        description: "Name of the application to build (e.g. qTox)"
         required: false
         type: string
       cmake-args:
-        description: 'Arguments to pass to CMake'
+        description: "Arguments to pass to CMake"
         required: false
         type: string
       production:
@@ -30,11 +30,11 @@ jobs:
       matrix:
         arch: [armeabi-v7a, arm64-v8a]
         build-type: [Debug, Release]
-        version: [6.2.4, 6.8.1]
+        version: [6.2.4, 6.12.0]
         exclude:
           - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'armeabi-v7a' }}
           - build-type: ${{ (github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') || contains(github.ref, 'refs/tags/v')) && 'Debug' }}
-          - version: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '6.8.1' }}
+          - version: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '6.12.0' }}
     steps:
       - name: Install prerequisites
         run: sudo apt-get install -y --no-install-recommends pcregrep
@@ -111,9 +111,9 @@ jobs:
         if: contains(github.ref, 'refs/tags/v')
         run: VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)";
           third_party/ci-tools/tools/artifact_rename.py
-            "${{ steps.artifact.outputs.artifact-source }}"
-            "${{ steps.artifact.outputs.artifact-versioned }}"
-            ${{ steps.artifact.outputs.artifact-source }}
+          "${{ steps.artifact.outputs.artifact-source }}"
+          "${{ steps.artifact.outputs.artifact-versioned }}"
+          ${{ steps.artifact.outputs.artifact-source }}
       - name: Upload to versioned release
         if: inputs.production && contains(github.ref, 'refs/tags/v')
         uses: ncipollo/release-action@v1
@@ -125,9 +125,9 @@ jobs:
         id: nightly-version
         run: VERSION="nightly";
           third_party/ci-tools/tools/artifact_rename.py
-            "${{ steps.artifact.outputs.artifact-source }}"
-            "${{ steps.artifact.outputs.artifact-versioned }}"
-            ${{ steps.artifact.outputs.artifact-source }}
+          "${{ steps.artifact.outputs.artifact-source }}"
+          "${{ steps.artifact.outputs.artifact-versioned }}"
+          ${{ steps.artifact.outputs.artifact-source }}
       - name: Upload to nightly release
         uses: ncipollo/release-action@v1
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
