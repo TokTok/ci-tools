@@ -79,7 +79,7 @@ readonly BUILD_DIR="$(realpath .)"
 readonly PROJECT_APP_DIR="$BUILD_DIR/$PROJECT_NAME.AppDir"
 
 # Pin appimagetool version for reproducibility
-readonly APPIMAGE_TOOL_VERSION="951"
+readonly APPIMAGE_TOOL_VERSION="954"
 readonly APPIMAGE_TOOL_URL="https://github.com/probonopd/go-appimage/releases/download/continuous/appimagetool-$APPIMAGE_TOOL_VERSION-x86_64.AppImage"
 
 rm -f appimagetool-*.AppImage
@@ -143,7 +143,7 @@ export LD_LIBRARY_PATH="/opt/buildhome/lib:/opt/buildhome/lib64:$QTDIR/lib"
 # Copy offscreen/wayland plugins to the app dir.
 mkdir -p "$PROJECT_APP_DIR/$QTDIR/plugins/platforms"
 cp -r "$QTDIR/plugins/platforms/libqoffscreen.so" "$PROJECT_APP_DIR/$QTDIR/plugins/platforms/"
-cp -r "$QTDIR/plugins/platforms/libqwayland-generic.so" "$PROJECT_APP_DIR/$QTDIR/plugins/platforms/"
+cp -r "$QTDIR/plugins/platforms/libqwayland.so" "$PROJECT_APP_DIR/$QTDIR/plugins/platforms/"
 # Copy the tls plugins to the app dir, needed for https connections.
 cp -r "$QTDIR/plugins/tls/" "$PROJECT_APP_DIR/$QTDIR/plugins/"
 
