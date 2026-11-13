@@ -60,7 +60,7 @@ readonly PROJECT_PREFIX_DIR
 PROJECT_PACKAGE_DIR="$(realpath package-prefix)"
 readonly PROJECT_PACKAGE_DIR
 
-if [ -z "${ARCH:-}" ]; then
+if [ "${ARCH:-}" = "" ]; then
   echo "Error: No architecture was specified. Please specify either 'i686' or 'x86_64', case sensitive."
   exit 1
 fi
@@ -74,11 +74,11 @@ else
   exit 1
 fi
 
-if [ -z "$PROJECT_SRC_DIR" ]; then
+if [ "$PROJECT_SRC_DIR" = "" ]; then
   echo "--src-dir must be specified"
 fi
 
-if [ -z "$BUILD_TYPE" ]; then
+if [ "$BUILD_TYPE" = "" ]; then
   echo "Error: No build type was specified. Please specify either 'Release' or 'Debug', case sensitive."
   exit 1
 fi
@@ -88,7 +88,7 @@ if [[ "$BUILD_TYPE" != "Release" ]] && [[ "$BUILD_TYPE" != "Debug" ]]; then
   exit 1
 fi
 
-if [ -z "${PROJECT_NAME:-}" ]; then
+if [ "${PROJECT_NAME:-}" = "" ]; then
   echo "Error: No project name was specified."
   exit 1
 fi
@@ -139,7 +139,7 @@ fi
 # Add all the DLL dependencies from the local dll-deps file to DLL_DEPS.
 # Ignore lines starting with # and empty lines.
 while IFS= read -r line; do
-  if [ -n "$line" ] && [ "${line:0:1}" != "#" ]; then
+  if [ "$line" != "" ] && [ "${line:0:1}" != "#" ]; then
     DLL_DEPS+=("$line")
   fi
 done <"$GIT_ROOT/platform/windows/cross-compile/dll-deps"
@@ -148,13 +148,13 @@ done <"$GIT_ROOT/platform/windows/cross-compile/dll-deps"
 if [[ " ${DLL_DEPS[*]} " == *" tls/qopensslbackend.dll "* ]]; then
   if [ "$ARCH" == "i686" ]; then
     DLL_DEPS+=(
-      libcrypto-3.dll
-      libssl-3.dll
+      libcrypto-4.dll
+      libssl-4.dll
     )
   elif [ "$ARCH" == "x86_64" ]; then
     DLL_DEPS+=(
-      libcrypto-3-x64.dll
-      libssl-3-x64.dll
+      libcrypto-4-x64.dll
+      libssl-4-x64.dll
     )
   fi
 fi
