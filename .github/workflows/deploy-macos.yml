@@ -54,10 +54,10 @@ jobs:
     strategy:
       matrix:
         arch: [arm64, x86_64]
-        macos: ["10.15", "12.0"]
+        macos: ["10.15", "14.4"]
         exclude:
           - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'x86_64' }}
-          - macos: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '12.0' }}
+          - macos: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '14.4' }}
     runs-on: ${{ matrix.arch == 'arm64' && 'macos-26' || 'macos-15-intel' }}
     permissions:
       contents: write
@@ -197,10 +197,10 @@ jobs:
     strategy:
       matrix:
         arch: [arm64, x86_64]
-        macos: ["10.15", "12.0"]
+        macos: ["10.15", "14.4"]
         exclude:
           - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'x86_64' }}
-          - macos: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '12.0' }}
+          - macos: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && '14.4' }}
     runs-on: ${{ matrix.arch == 'arm64' && 'macos-26' || 'macos-15-intel' }}
     permissions:
       contents: write
