@@ -38,13 +38,13 @@ jobs:
     steps:
       - name: Install prerequisites
         run: sudo apt-get install -y --no-install-recommends pcregrep
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
       - name: Checkout ci-tools
         if: github.repository != 'TokTok/ci-tools'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: TokTok/ci-tools
           path: third_party/ci-tools
@@ -53,7 +53,7 @@ jobs:
         if: github.repository == 'TokTok/ci-tools'
         run: ln -s .. third_party/ci-tools
       - name: Checkout dockerfiles
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: TokTok/dockerfiles
           path: third_party/dockerfiles
@@ -78,7 +78,7 @@ jobs:
 
           echo "docker_image=android_builder.${{ matrix.arch }}.${ARTIFACT_TYPE}_${{ matrix.version }}" >>$GITHUB_OUTPUT
       - name: Cache compiler output
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .cache/ccache
           key: ${{ github.job }}-android-${{ matrix.arch }}-${{ matrix.build-type }}-${{ matrix.version }}-ccache
@@ -101,7 +101,7 @@ jobs:
           "${{ steps.artifact.outputs.project-name }}"
           ${{ steps.artifact.outputs.artifact-source }}
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.sha256.outputs.project-name }}-${{ github.sha }}-android-${{ matrix.arch }}-${{ matrix.build-type }}-${{ matrix.version }}
           path: ${{ steps.sha256.outputs.artifacts }}

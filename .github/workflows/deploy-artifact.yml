@@ -4,23 +4,23 @@ on:
   workflow_call:
     inputs:
       project-name:
-        description: 'Name of the application to build (e.g. qTox)'
+        description: "Name of the application to build (e.g. qTox)"
         required: false
         type: string
       artifact-source:
-        description: 'Artifact produced by the command (e.g. qTox.AppImage)'
+        description: "Artifact produced by the command (e.g. qTox.AppImage)"
         required: true
         type: string
       artifact-versioned:
-        description: 'File name format for the versioned artifact (e.g. qTox-$VERSION.AppImage)'
+        description: "File name format for the versioned artifact (e.g. qTox-$VERSION.AppImage)"
         required: true
         type: string
       build:
-        description: 'Name of the build (e.g. appimage, flatpak, macos)'
+        description: "Name of the build (e.g. appimage, flatpak, macos)"
         required: true
         type: string
       run:
-        description: 'Command to run to build the artifact'
+        description: "Command to run to build the artifact"
         required: false
         type: string
 
@@ -31,13 +31,13 @@ jobs:
     steps:
       - name: Install prerequisites
         run: sudo apt-get install -y --no-install-recommends pcregrep
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
       - name: Checkout ci-tools
         if: github.repository != 'TokTok/ci-tools'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: TokTok/ci-tools
           path: third_party/ci-tools
@@ -56,7 +56,7 @@ jobs:
           "${{ inputs.project-name }}"
           ${{ inputs.artifact-source }}
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.sha256.outputs.project-name }}-${{ github.sha }}-${{ inputs.build }}
           path: ${{ steps.sha256.outputs.artifacts }}
@@ -66,9 +66,9 @@ jobs:
         if: contains(github.ref, 'refs/tags/v')
         run: VERSION="$(echo "$GITHUB_REF" | cut -d / -f 3)";
           third_party/ci-tools/tools/artifact_rename.py
-            "${{ inputs.artifact-source }}"
-            "${{ inputs.artifact-versioned }}"
-            ${{ inputs.artifact-source }}
+          "${{ inputs.artifact-source }}"
+          "${{ inputs.artifact-versioned }}"
+          ${{ inputs.artifact-source }}
       - name: Upload to versioned release
         if: contains(github.ref, 'refs/tags/v')
         uses: ncipollo/release-action@v1
@@ -80,9 +80,9 @@ jobs:
         id: nightly-version
         run: VERSION="nightly";
           third_party/ci-tools/tools/artifact_rename.py
-            "${{ inputs.artifact-source }}"
-            "${{ inputs.artifact-versioned }}"
-            ${{ inputs.artifact-source }}
+          "${{ inputs.artifact-source }}"
+          "${{ inputs.artifact-versioned }}"
+          ${{ inputs.artifact-source }}
       - name: Upload to nightly release
         uses: ncipollo/release-action@v1
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'

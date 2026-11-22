@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       project-name:
-        description: 'Name of the application to build (e.g. qTox).'
+        description: "Name of the application to build (e.g. qTox)."
         required: false
         type: string
       cmake-args:
-        description: 'Arguments to pass to CMake.'
+        description: "Arguments to pass to CMake."
         required: false
         type: string
       need-qt:
@@ -19,7 +19,7 @@ on:
         type: boolean
         default: true
       smoke-test:
-        description: 'Command to run to smoke test the AppImage.'
+        description: "Command to run to smoke test the AppImage."
         required: true
         type: string
       test-files:
@@ -48,13 +48,13 @@ jobs:
     steps:
       - name: Install prerequisites
         run: sudo apt-get install -y --no-install-recommends pcregrep
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
       - name: Checkout ci-tools
         if: github.repository != 'TokTok/ci-tools'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: TokTok/ci-tools
           path: third_party/ci-tools
@@ -63,7 +63,7 @@ jobs:
         if: github.repository == 'TokTok/ci-tools'
         run: ln -s .. third_party/ci-tools
       - name: Checkout dockerfiles
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: TokTok/dockerfiles
           path: third_party/dockerfiles
@@ -86,7 +86,7 @@ jobs:
           echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
           echo "binary-name=$BINARY_NAME" >>$GITHUB_OUTPUT
       - name: Cache compiler output
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .cache/ccache
           key: ${{ github.job }}-windows-${{ matrix.arch }}-${{ matrix.build-type }}-ccache
@@ -106,13 +106,13 @@ jobs:
           ${{ inputs.cmake-args }}
       - name: Upload installer
         if: matrix.build-type == 'Release'
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifact.outputs.artifact-ref }}
           path: package-prefix/${{ steps.artifact.outputs.artifact }}
           if-no-files-found: error
       - name: Upload zip
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifact.outputs.project-name }}-${{ github.sha }}-windows-zip-${{ matrix.build-type }}-${{ matrix.arch }}
           path: install-prefix/${{ steps.artifact.outputs.binary-name }}-${{ matrix.arch }}-${{ matrix.build-type }}.zip
@@ -173,7 +173,7 @@ jobs:
         exclude:
           - arch: ${{ github.event_name == 'pull_request' && !contains(github.event.pull_request.labels.*.name, 'packaging') && 'i686' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: inputs.test-files
         with:
           # Fetch tags if we're not already in a tag build.
@@ -189,7 +189,7 @@ jobs:
           echo "artifact-ref=${{ needs.build.outputs.project-name }}-${{ github.sha }}-windows-exe-${{ matrix.build-type }}-${{ matrix.arch }}" >>$GITHUB_OUTPUT
           echo "binary-name=$BINARY_NAME" >>$GITHUB_OUTPUT
       - name: Download artifact from build step
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ steps.artifact.outputs.artifact-ref }}
       - name: Unpack exe

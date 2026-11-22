@@ -42,9 +42,9 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Checkout TokTok/ci-tools
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: TokTok/ci-tools
           path: ci-tools
@@ -55,7 +55,7 @@ jobs:
           cabal-version: ${{ inputs.cabal-version }}
 
       - name: Cache
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         env:
           ghc-version: ${{ inputs.ghc-version }}
           cache-name: cache-cabal

@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-slim
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -49,7 +49,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -66,7 +66,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 2
       - name: Setup Flutter
@@ -84,13 +84,13 @@ jobs:
       - name: Run tests
         run: flutter test --coverage
       - name: Upload to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
       - name: Upload failed test goldens
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: failed-test-goldens
           path: test/**/failures
@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -126,7 +126,7 @@ jobs:
       - name: Copy release APK to ${{ inputs.project-name }}-android.apk
         run: cp build/app/outputs/flutter-apk/app-release.apk ${{ inputs.project-name }}-android.apk
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.project-name }}-android.apk
           path: ${{ inputs.project-name }}-android.apk
@@ -148,7 +148,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -166,7 +166,7 @@ jobs:
       - name: Create tarball
         run: tar zcf ${{ inputs.project-name }}-linux.tar.gz -C build/linux/x64/release bundle
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.project-name }}-linux.tar.gz
           path: ${{ inputs.project-name }}-linux.tar.gz
@@ -189,7 +189,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.project-name }}-linux.tar.gz
       - name: Extract artifact
@@ -206,7 +206,7 @@ jobs:
           DISPLAY: ":99"
           XAUTHORITY: /tmp/xvfb.auth
       - name: Upload screenshot
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.project-name }}-linux.png
           path: ${{ inputs.project-name }}-linux.png
@@ -228,7 +228,7 @@ jobs:
     runs-on: macos-26
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -246,7 +246,7 @@ jobs:
           zip -r ${{ inputs.project-name }}-ios.zip Payload
           mv ${{ inputs.project-name }}-ios.zip ${{ inputs.project-name }}-ios.ipa
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.project-name }}-ios.ipa
           path: ${{ inputs.project-name }}-ios.ipa
@@ -268,7 +268,7 @@ jobs:
     runs-on: macos-26
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -282,7 +282,7 @@ jobs:
       - name: Create tarball
         run: tar zcf ${{ inputs.project-name }}-macos.tar.gz -C build/macos/Build/Products/Release ${{ inputs.project-name }}.app
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.project-name }}-macos.tar.gz
           path: ${{ inputs.project-name }}-macos.tar.gz
@@ -305,7 +305,7 @@ jobs:
     runs-on: macos-26
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.project-name }}-macos.tar.gz
       - name: Extract artifact
@@ -315,7 +315,7 @@ jobs:
       - name: Take a screenshot
         run: screencapture -x ${{ inputs.project-name }}-macos.png
       - name: Upload screenshot
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.project-name }}-macos.png
           path: ${{ inputs.project-name }}-macos.png
@@ -340,7 +340,7 @@ jobs:
         shell: bash
     steps:
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -354,7 +354,7 @@ jobs:
       - name: Create tarball
         run: tar -zcf ${{ inputs.project-name }}-windows-x64.tar.gz -C build/windows/x64/runner/Release .
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.project-name }}-windows-x64.tar.gz
           path: ${{ inputs.project-name }}-windows-x64.tar.gz
@@ -377,7 +377,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.project-name }}-windows-x64.tar.gz
       - name: Extract artifact
@@ -399,7 +399,7 @@ jobs:
       - name: Take a screenshot
         run: ./nircmd.exe savescreenshot ${{ inputs.project-name }}-windows.png
       - name: Upload screenshot
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ inputs.project-name }}-windows.png
           path: ${{ inputs.project-name }}-windows.png

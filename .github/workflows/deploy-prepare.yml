@@ -9,7 +9,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Move nightly tag to head for nightly release
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: git tag -f nightly && git push origin nightly -f
@@ -20,14 +20,14 @@ jobs:
     steps:
       - name: Install python dependencies
         run: sudo apt-get update && sudo apt-get install python3-requests
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: github.event_name == 'pull_request'
         with:
           # Fetch all history so that we can check for changes in the entire history.
           fetch-depth: 0
       - name: Checkout ci-tools
         if: github.event_name == 'pull_request' && github.repository != 'TokTok/ci-tools'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: TokTok/ci-tools
           path: third_party/ci-tools

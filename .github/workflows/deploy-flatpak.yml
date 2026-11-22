@@ -4,14 +4,14 @@ on:
   workflow_call:
     inputs:
       project-name:
-        description: 'Name of the application to build (e.g. qTox)'
+        description: "Name of the application to build (e.g. qTox)"
         required: false
         type: string
       org-name:
-        description: 'Reverse domain name of the organization to build (e.g. chat.tox)'
+        description: "Reverse domain name of the organization to build (e.g. chat.tox)"
         required: false
         type: string
-        default: 'chat.tox'
+        default: "chat.tox"
       screenshot:
         description: |
           Whether the smoke-test will output a screenshot. If true, the
@@ -21,7 +21,7 @@ on:
         required: false
         type: boolean
       smoke-test:
-        description: 'Command to run to smoke test the AppImage'
+        description: "Command to run to smoke test the AppImage"
         required: true
         type: string
       test-files:
@@ -44,13 +44,13 @@ jobs:
     steps:
       - name: Install prerequisites
         run: sudo apt-get install -y --no-install-recommends pcregrep
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
           submodules: true
       - name: Checkout ci-tools
         if: github.repository != 'TokTok/ci-tools'
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: TokTok/ci-tools
           path: third_party/ci-tools
@@ -59,7 +59,7 @@ jobs:
         if: github.repository == 'TokTok/ci-tools'
         run: ln -s .. third_party/ci-tools
       - name: Checkout dockerfiles
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: TokTok/dockerfiles
           path: third_party/dockerfiles
@@ -81,7 +81,7 @@ jobs:
           echo "artifact-ref=$PROJECT_NAME-${{ github.sha }}-flatpak-${{ matrix.arch }}" >>$GITHUB_OUTPUT
           echo "binary-name=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')" >>$GITHUB_OUTPUT
       - name: Cache flatpak-builder cache (except ccache)
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             .flatpak-builder/cache
@@ -89,7 +89,7 @@ jobs:
             .flatpak-builder/downloads
           key: ${{ github.job }}-flatpak-builder
       - name: Cache flatpak-builder cache (only ccache)
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .flatpak-builder/ccache
           key: ${{ github.job }}-flatpak-ccache
@@ -104,7 +104,7 @@ jobs:
           ${{ inputs.org-name }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.artifact.outputs.artifact-ref }}
           path: |
@@ -157,7 +157,7 @@ jobs:
     steps:
       - name: Install prerequisites
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends pcregrep
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: inputs.test-files
         with:
           # Fetch tags if we're not already in a tag build.
@@ -176,7 +176,7 @@ jobs:
           echo "binary-name=$(echo "$PROJECT_NAME" | tr '[:upper:]' '[:lower:]')" >>$GITHUB_OUTPUT
           echo "project-name=$PROJECT_NAME" >>$GITHUB_OUTPUT
       - name: Download artifact from build step
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: ${{ steps.artifact.outputs.artifact-ref }}
       - name: Install flatpak runner
