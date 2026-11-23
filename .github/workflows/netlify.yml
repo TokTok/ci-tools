@@ -64,11 +64,12 @@ jobs:
         id: deployment
         run: |
           if ${{ github.event_name == 'push' }}; then
-            netlify deploy --dir=_site --prod | tee deploy.log
+            netlify deploy --dir=_site --prod --json | tee deploy.json
           else
-            netlify deploy --dir=_site --alias="deploy-preview-${{ github.event.number }}" | tee deploy.log
+            netlify deploy --dir=_site --alias="deploy-preview-${{ github.event.number }}" --json | tee deploy.json
           fi
-          echo "page_url=$(grep -E 'Website (draft )?URL:' deploy.log | grep -o 'https://[^ ]*')" >>$GITHUB_OUTPUT
+          page_url=$(jq -er '.url // .deploy_url' deploy.json)
+          echo "page_url=$page_url" >>"$GITHUB_OUTPUT"
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
       - name: Write preview URL to PR
