@@ -27,7 +27,7 @@ jobs:
         run: echo "commits-since-last-release=$(git rev-list --count $(git describe --tags --abbrev=0 --match 'v*')..HEAD)" >>$GITHUB_OUTPUT
       - name: Warn if close to ${{ inputs.warn-commits-since-last-release }} commits since last release
         if: steps.validate.outputs.commits-since-last-release >= inputs.warn-commits-since-last-release
-        uses: thollander/actions-comment-pull-request@v3
+        uses: thollander/actions-comment-pull-request@v3.0.1
         with:
           message: |
             :warning: There are ${{ steps.validate.outputs.commits-since-last-release }} commits since the last release. Consider releasing soon.

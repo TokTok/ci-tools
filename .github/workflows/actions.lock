@@ -79,14 +79,14 @@ workflows:
         - 'haskell-actions/setup@v2'
     '.github/workflows/netlify.yml':
         - 'actions/checkout@v7'
-        - 'thollander/actions-comment-pull-request@v3'
+        - 'thollander/actions-comment-pull-request@v3.0.1'
     '.github/workflows/release-deploy.yml':
         - 'actions/checkout@v7'
     '.github/workflows/release-drafter.yml':
         - 'release-drafter/release-drafter@v7'
     '.github/workflows/release-soon.yml':
         - 'actions/checkout@v7'
-        - 'thollander/actions-comment-pull-request@v3'
+        - 'thollander/actions-comment-pull-request@v3.0.1'
     '.github/workflows/release.yml': []
     '.github/workflows/restyler-mirror.yml':
         - 'actions/checkout@v7'
@@ -197,8 +197,8 @@ dependencies:
         repo_id: 202116560
         uses:
             - 'actions/cache@v5'
-    'thollander/actions-comment-pull-request@v3':
-        ref: 'v3'
+    'thollander/actions-comment-pull-request@v3.0.1':
+        ref: 'v3.0.1'
         commit: 'sha1-24bffb9b452ba05a4f3f77933840a6a841d1b32b'
         owner_id: 23191482
         repo_id: 218601347

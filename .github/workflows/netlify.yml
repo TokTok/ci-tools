@@ -41,7 +41,7 @@ jobs:
     steps:
       - name: Write preview URL to PR
         if: github.event_name == 'pull_request_target' && inputs.comment
-        uses: thollander/actions-comment-pull-request@v3
+        uses: thollander/actions-comment-pull-request@v3.0.1
         with:
           message: |
             > [!NOTE]
@@ -73,7 +73,7 @@ jobs:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
       - name: Write preview URL to PR
         if: github.event_name == 'pull_request_target' && inputs.comment
-        uses: thollander/actions-comment-pull-request@v3
+        uses: thollander/actions-comment-pull-request@v3.0.1
         with:
           message: |
             > [!TIP]
@@ -81,7 +81,7 @@ jobs:
           comment-tag: preview
       - name: Write warning comment if build failed
         if: failure() && github.event_name == 'pull_request_target' && inputs.comment
-        uses: thollander/actions-comment-pull-request@v3
+        uses: thollander/actions-comment-pull-request@v3.0.1
         with:
           message: |
             > [!WARNING]
