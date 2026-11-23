@@ -30,10 +30,16 @@ def release_github() -> Optional[str]:
     )
 
     releases = resp.json()
-    if not releases:
-        print("WARNING: GitHub API produced empty response for releases.")
+    if not resp.ok or not isinstance(releases, list):
+        print(f"WARNING: GitHub API failed to list releases: {releases}")
         print("WARNING: Aborting.")
         sys.exit(1)
+
+    # Drafts are hidden from tokens that can't push, as in PRs from forks.
+    if not releases:
+        print("WARNING: Could not find any releases.")
+        print("WARNING: Skipping the draft release check.")
+        return None
 
     release = releases[0]
     if not release["draft"]:
