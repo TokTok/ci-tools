@@ -94,5 +94,6 @@ git fetch upstream master
 readarray -t COMMITS < <(git rev-list --reverse upstream/master..HEAD)
 for commit in "${COMMITS[@]}"; do
   git checkout "$commit"
+  git submodule update --init --recursive
   run_test
 done
