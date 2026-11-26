@@ -10,7 +10,11 @@ fi
 FLAVOUR=${CIRCLE_JOB//bazel-/}
 REPO_NAME=$CIRCLE_PROJECT_REPONAME
 
-REPO_DIR=$(echo "$REPO_NAME" | tr - _ | tr '[:upper:]' '[:lower:]')
+REPO_DIR=$(awk -v r="${REPO_NAME,,}" '
+  $1 == "path" { p = $3 }
+  $1 == "url" { sub(/.*\//, "", $3); sub(/\.git$/, "", $3); if (tolower($3) == r) { print p; exit } }
+' /src/workspace/.gitmodules)
+[[ -n "$REPO_DIR" && -d "/src/workspace/$REPO_DIR" ]]
 
 BAZEL_ARGS=("$@")
 if [[ "${#BAZEL_ARGS[@]}" -eq 0 ]]; then
